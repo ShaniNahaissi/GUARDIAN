@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-guardian-bg: #0F172A;
+  --color-guardian-card: #1E293B;
+  --color-guardian-text: #F8FAFC;
+  --color-guardian-muted: #94A3B8;
+  --color-guardian-danger: #EF4444;
+  --color-guardian-warning: #F59E0B;
+  --color-guardian-success: #10B981;
+  --color-guardian-accent: #3B82F6;
+}
+
+@layer base {
+  body {
+    @apply bg-guardian-bg text-guardian-text font-sans antialiased;
+  }
+}
