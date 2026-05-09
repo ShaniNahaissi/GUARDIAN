@@ -9,9 +9,9 @@ interface MainLayoutProps {
 
 export const MainLayout: React.FC<MainLayoutProps> = ({ children, currentView, onNavigate }) => {
   return (
-    <div className="flex h-screen w-screen bg-guardian-bg text-guardian-text overflow-hidden">
+    <div className="flex h-dvh w-full flex-col md:flex-row bg-guardian-bg text-guardian-text overflow-hidden">
       <Sidebar currentView={currentView} onNavigate={onNavigate} />
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6">
         {children}
       </main>
     </div>

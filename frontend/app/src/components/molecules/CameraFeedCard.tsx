@@ -42,18 +42,18 @@ export const CameraFeedCard: React.FC<CameraFeedCardProps> = ({ id, name, locati
         </div>
       </div>
       
-      <div className="p-4 flex justify-between items-end bg-guardian-card">
-        <div>
+      <div className="p-4 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end bg-guardian-card">
+        <div className="min-w-0">
           <h3 className="font-bold text-lg leading-tight">{name}</h3>
           <p className="text-sm text-guardian-muted mt-1">{location}</p>
           <p className="text-xs text-gray-500 mt-2">{id}</p>
         </div>
         
-        <div className="flex gap-2">
-          <Button variant="secondary" className="!px-3 !py-1.5 text-xs" onClick={() => onView(id)}>
+        <div className="flex w-full sm:w-auto gap-2">
+          <Button variant="secondary" className="flex-1 sm:flex-none !px-3 !py-1.5 text-xs" onClick={() => onView(id)}>
             <Eye className="w-4 h-4" /> View
           </Button>
-          <Button variant={status === 'normal' ? 'secondary' : 'danger'} className="!px-3 !py-1.5 text-xs" onClick={handleAlert}>
+          <Button variant={status === 'normal' ? 'secondary' : 'danger'} className="flex-1 sm:flex-none !px-3 !py-1.5 text-xs" onClick={handleAlert}>
             <Bell className="w-4 h-4" /> Alert
           </Button>
         </div>

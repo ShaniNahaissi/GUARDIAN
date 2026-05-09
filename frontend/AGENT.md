@@ -74,7 +74,7 @@ export const myNewFetch = async (): Promise<MyType> => {
 ```
 
 `isBackendEnabled()` reads `localStorage.guardian_use_backend`. Default is `true`.  
-`getBackendUrl()` reads `localStorage.guardian_backend_url` → falls back to `import.meta.env.VITE_BACKEND_URL` → falls back to `http://localhost:8000/api`.
+`getBackendUrl()` reads `localStorage.guardian_backend_url` → `VITE_BACKEND_URL` → in **dev** defaults to **`/api`** so requests go through the Vite proxy (proxy uses `https://127.0.0.1:8000` with `secure: false`). Avoid defaulting the browser to `https://localhost:8000/api` in dev: self-signed TLS often yields `TypeError: Load failed`. Production builds without `VITE_BACKEND_URL` fall back to `https://localhost:8000/api`.
 
 ---
 

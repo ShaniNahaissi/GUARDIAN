@@ -92,7 +92,11 @@ App will be available at `http://localhost:8080`.
 Create a `.env` file in `frontend/app/`:
 
 ```env
-VITE_BACKEND_URL=http://localhost:8000/api
+# Recommended for `npm run dev`: same-origin `/api` — Vite proxies to the backend (TLS + self-signed cert stay server-side).
+VITE_BACKEND_URL=/api
+
+# Only if you do not use the Vite proxy (advanced): browser must trust the backend TLS cert.
+# VITE_BACKEND_URL=https://localhost:8000/api
 ```
 
 All Vite env vars must be prefixed with `VITE_`.

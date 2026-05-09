@@ -1,0 +1,7 @@
+.git
+.gitignore
+.antigravity
+**/.venv
+**/__pycache__
+**/*.pyc
+frontend

@@ -48,18 +48,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera 
         <StatCard title="Critical Alerts" value={stats?.criticalAlerts.toString() || '0'} subValue="Priority" trend="Requires action" iconType="critical" statusLabel="High Risk" statusBadge="critical" />
       </div>
 
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end">
         <div>
           <h2 className="text-2xl font-bold mb-1">Live Camera Feeds</h2>
           <p className="text-guardian-muted text-sm">Real-time weapon detection monitoring</p>
         </div>
-        <div className="flex gap-3 relative">
-          <div>
-            <Button variant="secondary" onClick={() => setShowFilterMenu(!showFilterMenu)}>
+        <div className="flex flex-col sm:flex-row gap-3 relative w-full sm:w-auto">
+          <div className="relative w-full sm:w-auto">
+            <Button className="w-full sm:w-auto" variant="secondary" onClick={() => setShowFilterMenu(!showFilterMenu)}>
               <Filter className="w-4 h-4" /> Filter {filter !== 'all' && `(${filter})`}
             </Button>
             {showFilterMenu && (
-              <div className="absolute top-full mt-2 left-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20 overflow-hidden">
+              <div className="absolute top-full mt-2 left-0 w-full sm:w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20 overflow-hidden">
                 <button
                   className={`w-full text-left px-4 py-2 hover:bg-gray-700 ${filter === 'all' ? 'text-guardian-accent' : ''}`}
                   onClick={() => { setFilter('all'); setShowFilterMenu(false); }}
@@ -78,8 +78,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera 
               </div>
             )}
           </div>
-          <Button variant="secondary" onClick={loadData}><RefreshCcw className="w-4 h-4" /> Refresh</Button>
-          <Button variant="primary" onClick={onAddCamera}><Plus className="w-4 h-4" /> Add Camera</Button>
+          <Button className="w-full sm:w-auto" variant="secondary" onClick={loadData}><RefreshCcw className="w-4 h-4" /> Refresh</Button>
+          <Button className="w-full sm:w-auto" variant="primary" onClick={onAddCamera}><Plus className="w-4 h-4" /> Add server</Button>
         </div>
       </div>
 

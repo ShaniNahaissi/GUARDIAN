@@ -1,21 +1,61 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
 import { ThreatPanel } from '../components/molecules/ThreatPanel';
 import { AlertBanner } from '../components/molecules/AlertBanner';
 import { ArrowLeft, CircleDot, Camera, Maximize } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { getCameras } from '../services/dataService';
+import type { CameraInfo } from '../services/dataService';
 
 interface CameraViewProps {
   cameraId: string;
   onBack: () => void;
 }
 
+/** MJPEG and still URLs work in <img>. HLS / file-like video URLs need <video>. */
+const isVideoElementSource = (url: string): boolean => {
+  const lower = url.trim().toLowerCase();
+  if (!lower) return false;
+  if (lower.includes('.m3u8')) return true;
+  if (lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.ogg')) return true;
+  return false;
+};
+
 export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
+  const [camera, setCamera] = useState<CameraInfo | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showAlert, setShowAlert] = useState(true);
   const feedRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { showToast } = useToast();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await getCameras();
+        if (cancelled) return;
+        const found = list.find((c) => c.id === cameraId) ?? null;
+        setCamera(found);
+      } catch {
+        if (!cancelled) setCamera(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cameraId]);
+
+  const streamUrl = camera?.imageUrl?.trim() ?? '';
+  const useVideo = useMemo(() => isVideoElementSource(streamUrl), [streamUrl]);
+
+  useEffect(() => {
+    if (!useVideo || !streamUrl || !videoRef.current) return;
+    void videoRef.current.play().catch(() => {
+      showToast('Video stream could not autoplay. Use the player controls.', 'info');
+    });
+  }, [useVideo, streamUrl, showToast]);
 
   const handleRecord = () => {
     if (isRecording) {
@@ -46,13 +86,16 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-start gap-3 sm:items-center sm:gap-4 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <div>
-          <h1 className="text-2xl font-bold">Main Entrance - Parking</h1>
-          <p className="text-sm text-guardian-muted">{cameraId} • Building A - North Wing</p>
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold">{camera?.name ?? 'Camera'}</h1>
+          <p className="text-sm text-guardian-muted">
+            {cameraId}
+            {camera?.location ? ` • ${camera.location}` : ''}
+          </p>
         </div>
       </div>
 
@@ -68,29 +111,48 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
       )}
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
-        <div ref={feedRef} className="lg:col-span-2 flex flex-col h-full bg-black rounded-xl border border-gray-800 overflow-hidden relative">
-          <div className="absolute top-4 left-4 flex items-center gap-3 z-10">
+        <div ref={feedRef} className="lg:col-span-2 flex flex-col h-full min-h-[350px] bg-black rounded-xl border border-gray-800 overflow-hidden relative">
+          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center gap-2 sm:gap-3 z-10">
             <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
-            <span className="font-bold drop-shadow-md">Camera 03 - Main Entrance</span>
+            <span className="font-bold drop-shadow-md text-sm sm:text-base">{camera?.name ?? cameraId}</span>
           </div>
-          <div className="absolute top-4 right-4 z-10">
+          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
             <Badge status="critical">THREAT DETECTED</Badge>
           </div>
-          <div className="absolute top-16 left-4 z-10">
+          <div className="absolute top-14 left-3 sm:top-16 sm:left-4 z-10">
             <Badge status="critical">WEAPON DETECTED</Badge>
           </div>
 
           <div className="flex-1 relative flex items-center justify-center bg-gray-900">
-            <img 
-              src="https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80&w=1200" 
-              alt="Camera Feed" 
-              className="absolute inset-0 w-full h-full object-cover opacity-60"
-            />
-            <div className="absolute border-2 border-red-500 w-48 h-64 top-1/3 left-1/3 shadow-[0_0_15px_rgba(239,68,68,0.5)]"></div>
+            {streamUrl ? (
+              useVideo ? (
+                <video
+                  ref={videoRef}
+                  key={streamUrl}
+                  src={streamUrl}
+                  autoPlay
+                  playsInline
+                  muted
+                  controls
+                  className="absolute inset-0 w-full h-full object-cover opacity-90"
+                  onError={() => showToast('Video stream failed to load. Check URL and CORS.', 'error')}
+                />
+              ) : (
+                <img
+                  src={streamUrl}
+                  alt="Camera feed"
+                  className="absolute inset-0 w-full h-full object-cover opacity-90"
+                  onError={() => showToast('Feed URL failed to load.', 'error')}
+                />
+              )
+            ) : (
+              <p className="text-guardian-muted text-sm px-4 text-center">No stream URL set for this camera (imageUrl).</p>
+            )}
+            <div className="absolute border-2 border-red-500 w-36 h-48 sm:w-48 sm:h-64 top-1/3 left-1/3 shadow-[0_0_15px_rgba(239,68,68,0.5)] pointer-events-none" />
           </div>
 
-          <div className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-800 flex justify-between items-center z-10">
-            <div className="flex gap-2">
+          <div className="p-3 sm:p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-800 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center z-10">
+            <div className="flex flex-wrap gap-2">
               <Button variant={isRecording ? 'danger' : 'secondary'} onClick={handleRecord}>
                 <CircleDot className="w-4 h-4" /> {isRecording ? 'Stop Record' : 'Record'}
               </Button>
@@ -98,8 +160,8 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
                 <Camera className="w-4 h-4" /> Snapshot
               </Button>
             </div>
-            <div className="flex items-center gap-4 text-guardian-muted">
-              <span className="font-mono text-sm">14:23:45 {isRecording && '| REC'}</span>
+            <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 text-guardian-muted">
+              <span className="font-mono text-xs sm:text-sm">14:23:45 {isRecording && '| REC'}</span>
               <button className="hover:text-white" onClick={handleMaximize}>
                 <Maximize className="w-5 h-5" />
               </button>
@@ -107,7 +169,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
           </div>
         </div>
 
-        <div className="h-full overflow-y-auto pr-2">
+        <div className="h-full overflow-y-auto md:pr-2">
           <ThreatPanel 
             threatLevel="critical" 
             confidenceScore={98.7} 

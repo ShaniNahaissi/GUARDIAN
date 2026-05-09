@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
+import { coerceDevLoopbackBackendToProxy, upgradeLocalHttpBackendUrl } from '../services/dataService';
 
 export const SettingsPage: React.FC = () => {
   const [useBackend, setUseBackend] = useState(() => {
@@ -10,12 +11,21 @@ export const SettingsPage: React.FC = () => {
   
   const [backendUrl, setBackendUrl] = useState(() => {
     const savedUrl = localStorage.getItem('guardian_backend_url');
-    return savedUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000/api';
+    if (savedUrl) {
+      return coerceDevLoopbackBackendToProxy(upgradeLocalHttpBackendUrl(savedUrl));
+    }
+    if (import.meta.env.VITE_BACKEND_URL) {
+      return coerceDevLoopbackBackendToProxy(
+        upgradeLocalHttpBackendUrl(String(import.meta.env.VITE_BACKEND_URL)),
+      );
+    }
+    return import.meta.env.DEV ? '/api' : 'https://localhost:8000/api';
   });
 
   const handleSave = () => {
+    const normalized = coerceDevLoopbackBackendToProxy(upgradeLocalHttpBackendUrl(backendUrl.trim()));
     localStorage.setItem('guardian_use_backend', useBackend.toString());
-    localStorage.setItem('guardian_backend_url', backendUrl);
+    localStorage.setItem('guardian_backend_url', normalized);
     window.location.reload();
   };
 
@@ -26,10 +36,10 @@ export const SettingsPage: React.FC = () => {
         <p className="text-guardian-muted text-sm">Configure application settings</p>
       </div>
 
-      <Card className="p-6 max-w-2xl space-y-6">
+      <Card className="p-4 sm:p-6 max-w-2xl space-y-6">
         <h3 className="text-lg font-bold mb-4">Data Source Configuration</h3>
         
-        <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 bg-gray-900 rounded-lg">
           <div>
             <p className="font-medium text-white">Use Backend API</p>
             <p className="text-sm text-guardian-muted mt-1">
@@ -56,7 +66,7 @@ export const SettingsPage: React.FC = () => {
               value={backendUrl}
               onChange={(e) => setBackendUrl(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-guardian-accent"
-              placeholder="http://localhost:8000/api"
+              placeholder="/api (Vite dev) or https://host:8000/api"
             />
             <p className="text-xs text-guardian-muted mt-2">
               Default is taken from .env file (VITE_BACKEND_URL)
@@ -65,7 +75,7 @@ export const SettingsPage: React.FC = () => {
         )}
 
         <div className="pt-4 border-t border-gray-800 flex justify-end">
-          <Button onClick={handleSave}>
+          <Button className="w-full sm:w-auto" onClick={handleSave}>
             Save & Refresh
           </Button>
         </div>

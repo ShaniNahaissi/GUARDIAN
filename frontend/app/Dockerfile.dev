@@ -1,0 +1,11 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+EXPOSE 5173
+
+# Inline entrypoint avoids Windows CRLF on .sh files breaking the shebang in Linux.
+ENTRYPOINT ["sh", "-c", "cd /app && if [ ! -d node_modules/vite ]; then echo 'guardian-dev: installing npm dependencies (empty node_modules volume)...' && npm ci; fi && exec npm run dev -- --host 0.0.0.0 --port 5173"]

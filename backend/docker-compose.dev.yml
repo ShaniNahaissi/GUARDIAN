@@ -1,0 +1,12 @@
+services:
+  guardian-backend-dev:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend:/app/backend
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+    restart: unless-stopped

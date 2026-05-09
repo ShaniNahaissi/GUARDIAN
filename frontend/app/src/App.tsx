@@ -5,11 +5,12 @@ import { CameraView } from './pages/CameraView';
 import { LoginPage } from './pages/LoginPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AddCameraPage } from './pages/AddCameraPage';
+import { CameraStreamPage } from './pages/CameraStreamPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 function AppContent() {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'camera' | 'settings' | 'add-camera'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'camera' | 'settings' | 'add-camera' | 'camera-stream'>('dashboard');
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
 
   if (!user) {
@@ -35,6 +36,7 @@ function AppContent() {
       {currentView === 'dashboard' && <Dashboard onViewCamera={handleViewCamera} onAddCamera={() => setCurrentView('add-camera')} />}
       {currentView === 'settings' && <SettingsPage />}
       {currentView === 'add-camera' && <AddCameraPage onBack={handleBackToDashboard} />}
+      {currentView === 'camera-stream' && <CameraStreamPage onBack={handleBackToDashboard} />}
       {currentView === 'camera' && (
         <CameraView 
           cameraId={activeCameraId || 'CAM-001'} 
