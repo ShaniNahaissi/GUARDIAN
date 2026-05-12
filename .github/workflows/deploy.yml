@@ -15,4 +15,4 @@ jobs:
           cd /home/cs507/GUARDIAN
           git fetch origin main
           git reset --hard origin/main
-          docker compose -f docker-compose.yml up --build -d
+          docker compose -f docker-compose.yml up --build --force-recreate -d
