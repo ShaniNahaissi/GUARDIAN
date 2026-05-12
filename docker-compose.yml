@@ -5,7 +5,7 @@ services:
       dockerfile: backend/Dockerfile
     container_name: guardian-backend
     ports:
-      - "443:8000"
+      - "8000:8000"
     restart: unless-stopped
     healthcheck:
       test:
@@ -29,6 +29,7 @@ services:
     container_name: guardian-frontend
     ports:
       - "80:80"
+      - "443:443"
     depends_on:
       guardian-backend:
         condition: service_healthy
