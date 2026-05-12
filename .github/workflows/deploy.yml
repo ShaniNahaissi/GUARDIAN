@@ -13,5 +13,6 @@ jobs:
       - name: Deploy Code
         run: |
           cd /home/cs507/GUARDIAN
-          git pull origin main
+          git fetch origin main
+          git reset --hard origin/main
           docker compose -f docker-compose.yml up --build -d
