@@ -7,8 +7,8 @@ const apiProxyTarget = process.env.GUARDIAN_API_PROXY ?? 'https://127.0.0.1:8000
 
 const apiProxy = {
   '/api': { target: apiProxyTarget, changeOrigin: true, secure: false },
-  '/sw': { target: apiProxyTarget, ws: true, changeOrigin: true, secure: false },
-  '/consumer': { target: apiProxyTarget, changeOrigin: true, secure: false },
+  '/producer': { target: apiProxyTarget, ws: true, changeOrigin: true, secure: false },
+  '/consumer': { target: apiProxyTarget, ws: true, changeOrigin: true, secure: false },
   '/health': { target: apiProxyTarget, changeOrigin: true, secure: false },
 } as const
 

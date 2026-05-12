@@ -5,18 +5,24 @@ import { Button } from '../components/atoms/Button';
 import { Card } from '../components/atoms/Card';
 
 export const LoginPage: React.FC = () => {
-  const { login, register } = useAuth();
+  const { login, register, authError, clearAuthError } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLogin) {
-      login(username, password);
-    } else {
-      register(username, password, name);
+    setBusy(true);
+    try {
+      if (isLogin) {
+        await login(username, password);
+      } else {
+        await register(username, password, name);
+      }
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -66,14 +72,24 @@ export const LoginPage: React.FC = () => {
             />
           </div>
 
-          <Button type="submit" className="w-full mt-6">
-            {isLogin ? 'Login' : 'Register'}
+          <Button type="submit" className="w-full mt-6" disabled={busy}>
+            {busy ? 'Please wait…' : isLogin ? 'Login' : 'Register'}
           </Button>
         </form>
 
+        {authError && (
+          <p className="mt-4 text-sm text-guardian-danger text-center" role="alert">
+            {authError}
+          </p>
+        )}
+
         <div className="mt-6 text-center">
-          <button 
-            onClick={() => setIsLogin(!isLogin)} 
+          <button
+            type="button"
+            onClick={() => {
+              clearAuthError();
+              setIsLogin(!isLogin);
+            }}
             className="text-sm text-guardian-accent hover:underline"
           >
             {isLogin ? 'Need an account? Register' : 'Already have an account? Login'}

@@ -3,6 +3,7 @@ import { StatCard } from '../components/molecules/StatCard';
 import { CameraFeedCard } from '../components/molecules/CameraFeedCard';
 import { Button } from '../components/atoms/Button';
 import { Filter, RefreshCcw, Plus } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { getCameras, getSystemStats } from '../services/dataService';
 import type { CameraInfo, SystemStats } from '../services/dataService';
 
@@ -12,6 +13,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera }) => {
+  const { canWriteCameras } = useAuth();
   const [cameras, setCameras] = useState<CameraInfo[]>([]);
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [filter, setFilter] = useState<string>('all');
@@ -79,7 +81,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera 
             )}
           </div>
           <Button className="w-full sm:w-auto" variant="secondary" onClick={loadData}><RefreshCcw className="w-4 h-4" /> Refresh</Button>
-          <Button className="w-full sm:w-auto" variant="primary" onClick={onAddCamera}><Plus className="w-4 h-4" /> Add server</Button>
+          {canWriteCameras && (
+            <Button className="w-full sm:w-auto" variant="primary" onClick={onAddCamera}><Plus className="w-4 h-4" /> Add server</Button>
+          )}
         </div>
       </div>
 

@@ -1,4 +1,23 @@
+# Prefer repo-root `docker-compose.dev.yml` for Postgres + dev backend.
+
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: guardian-postgres-backend-dev-compose
+    environment:
+      POSTGRES_USER: guardian
+      POSTGRES_PASSWORD: guardian
+      POSTGRES_DB: guardian
+    volumes:
+      - guardian_pg_backend_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guardian -d guardian"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
   guardian-backend-dev:
     build:
       context: ..
@@ -9,4 +28,14 @@ services:
       - ../backend:/app/backend
     environment:
       WATCHFILES_FORCE_POLLING: "true"
+      GUARDIAN_DATABASE_URL: postgresql+asyncpg://guardian:guardian@postgres:5432/guardian
+      GUARDIAN_JWT_SECRET: ${GUARDIAN_JWT_SECRET:-dev-secret-change-me}
+      GUARDIAN_ADMIN_USERNAME: ${GUARDIAN_ADMIN_USERNAME:-Admin}
+      GUARDIAN_ADMIN_PASSWORD: ${GUARDIAN_ADMIN_PASSWORD:-admin}
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  guardian_pg_backend_dev:

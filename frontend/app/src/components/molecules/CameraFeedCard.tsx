@@ -3,6 +3,8 @@ import { Card } from '../atoms/Card';
 import { Badge } from '../atoms/Badge';
 import { Button } from '../atoms/Button';
 import { Eye, Bell } from 'lucide-react';
+import { LiveStreamPreview } from './LiveStreamPreview';
+import { useToast } from '../../context/ToastContext';
 
 interface CameraFeedCardProps {
   id: string;
@@ -14,8 +16,6 @@ interface CameraFeedCardProps {
   time: string;
   onView: (id: string) => void;
 }
-
-import { useToast } from '../../context/ToastContext';
 
 export const CameraFeedCard: React.FC<CameraFeedCardProps> = ({ id, name, location, status, statusText, imageUrl, time, onView }) => {
   const { showToast } = useToast();
@@ -31,7 +31,11 @@ export const CameraFeedCard: React.FC<CameraFeedCardProps> = ({ id, name, locati
       <div className="relative h-48 bg-gray-900 overflow-hidden">
         {/* Placeholder for camera feed image */}
         <div className="absolute inset-0 bg-gray-800 flex items-center justify-center text-guardian-muted">
-          <img src={imageUrl} alt={name} className="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity" />
+          {!imageUrl.trim() ? (
+            <LiveStreamPreview streamId={id} className="opacity-90 group-hover:opacity-100 transition-opacity" />
+          ) : (
+            <img src={imageUrl} alt={name} className="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity" />
+          )}
         </div>
         
         <div className="absolute top-3 left-3">

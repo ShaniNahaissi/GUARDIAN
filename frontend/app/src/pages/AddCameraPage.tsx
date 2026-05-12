@@ -1,19 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { ArrowLeft, Camera } from 'lucide-react';
 import { addCamera } from '../services/dataService';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 interface AddCameraPageProps {
   onBack: () => void;
 }
 
 export const AddCameraPage: React.FC<AddCameraPageProps> = ({ onBack }) => {
+  const { canWriteCameras } = useAuth();
   const [serverName, setServerName] = useState('');
   const [consumerBackendBase, setConsumerBackendBase] = useState('');
   const [streamUuid, setStreamUuid] = useState('');
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (!canWriteCameras) {
+      showToast('You do not have permission to add servers.', 'error');
+      onBack();
+    }
+  }, [canWriteCameras, onBack, showToast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +38,10 @@ export const AddCameraPage: React.FC<AddCameraPageProps> = ({ onBack }) => {
       showToast('Failed to add server.', 'error');
     }
   };
+
+  if (!canWriteCameras) {
+    return null;
+  }
 
   return (
     <div className="space-y-6">
@@ -63,9 +76,11 @@ export const AddCameraPage: React.FC<AddCameraPageProps> = ({ onBack }) => {
 
           <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-4 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-white mb-1">Stream / image URL (consume)</label>
+              <label className="block text-sm font-medium text-white mb-1">Live stream (same backend as API)</label>
               <p className="text-xs text-guardian-muted mb-3">
-                Same host as the API, path <code className="text-guardian-accent">/consumer/&lt;uuid&gt;</code> (not under <code className="text-guardian-muted">/api</code>), e.g. <code className="text-guardian-muted">https://localhost:8000/consumer/Aaa</code>. Optional if it matches Settings → backend host.
+                Use the same <strong>stream UUID</strong> as on the Camera Stream page. The dashboard opens{' '}
+                <code className="text-guardian-accent">WS /consumer/&lt;uuid&gt;</code> (not under{' '}
+                <code className="text-guardian-muted">/api</code>). Optional backend host below if it differs from Settings.
               </p>
             </div>
             <div>
@@ -86,7 +101,7 @@ export const AddCameraPage: React.FC<AddCameraPageProps> = ({ onBack }) => {
                 onChange={(e) => setStreamUuid(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-guardian-accent"
                 required 
-                placeholder="Same id as /sw/stream/{uuid} and /consumer/{uuid}"
+                placeholder="Same id as WS /producer/{uuid} and WS /consumer/{uuid}"
               />
             </div>
           </div>

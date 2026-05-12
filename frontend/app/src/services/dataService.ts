@@ -1,3 +1,11 @@
+import {
+  coerceDevLoopbackBackendToProxy,
+  getBackendUrl,
+  isBackendEnabled,
+  upgradeLocalHttpBackendUrl,
+} from './apiBase';
+import { getStoredAccessToken } from './authApi';
+
 export interface CameraInfo {
   id: string;
   name: string;
@@ -34,68 +42,29 @@ const MOCK_STATS: SystemStats = {
   criticalAlerts: 1
 };
 
-const isBackendEnabled = () => {
-  return localStorage.getItem('guardian_use_backend') !== 'false';
+const apiAuthHeaders = (): Record<string, string> => {
+  const h: Record<string, string> = {};
+  const t = getStoredAccessToken();
+  if (t) h.Authorization = `Bearer ${t}`;
+  return h;
 };
 
-/** After TLS migration, old Settings may still store http://localhost:8000/... — upgrade for mixed-content safety. */
-export const upgradeLocalHttpBackendUrl = (url: string): string => {
-  const trimmed = url.trim();
-  if (trimmed.startsWith('/') || !/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(trimmed)) {
-    return trimmed.replace(/^http:/i, 'https:');
-  }
-  return trimmed;
-};
+export { coerceDevLoopbackBackendToProxy, getBackendUrl, isBackendEnabled, upgradeLocalHttpBackendUrl };
 
-/**
- * In Vite dev, never call loopback :8000 from the browser (http:// breaks TLS-only backend; https:// hits self-signed pain).
- * Use same-origin /api so the dev proxy speaks HTTPS to the backend.
- */
-const isLocalViteShell = (): boolean => {
-  if (import.meta.env.DEV) return true;
-  if (typeof window === 'undefined') return false;
-  const { hostname, port } = window.location;
-  const loopback = hostname === 'localhost' || hostname === '127.0.0.1';
-  const vitePort = port === '5173' || port === '4173';
-  return loopback && vitePort;
-};
-
-export const coerceDevLoopbackBackendToProxy = (url: string): string => {
-  if (!isLocalViteShell() || url.startsWith('/')) return url;
-  try {
-    const u = new URL(url);
-    const loopback = u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]';
-    const portOk = u.port === '' || u.port === '8000';
-    if (!loopback || !portOk) return url;
-    const p = (u.pathname.replace(/\/$/, '') || '/').toLowerCase();
-    if (p === '/api' || p.startsWith('/api/')) {
-      return '/api';
-    }
-  } catch {
-    /* ignore */
-  }
-  return url;
-};
-
-const getBackendUrl = () => {
-  const fromStorage = localStorage.getItem('guardian_backend_url');
-  let url: string;
-  if (fromStorage) {
-    url = upgradeLocalHttpBackendUrl(fromStorage);
-  } else if (import.meta.env.VITE_BACKEND_URL) {
-    url = upgradeLocalHttpBackendUrl(String(import.meta.env.VITE_BACKEND_URL));
-  } else if (import.meta.env.DEV) {
-    url = '/api';
-  } else {
-    url = 'https://localhost:8000/api';
-  }
-  return coerceDevLoopbackBackendToProxy(url);
-};
+export interface StreamTrackPayload {
+  stream_id: string;
+  frame_seq: number;
+  tracks: Array<{
+    track_id: number;
+    bbox: [number, number, number, number];
+    class_name: string;
+    confidence: number;
+  }>;
+}
 
 /**
  * Scheme + host + port for stream endpoints (not under /api).
- * Backend: GET /consumer/{stream_id} (MJPEG), GET /consumer/{stream_id}/frame (JPEG), WS /sw/stream/{stream_id}.
+ * Backend: WS /producer/{id} (ingest JPEG), WS /consumer/{id} (binary JPEG + JSON tracks), GET /consumer/{id}/frame (snapshot).
  */
 const getBackendOriginForStreams = (): string => {
   const backendUrl = getBackendUrl();
@@ -110,30 +79,45 @@ const getBackendOriginForStreams = (): string => {
   }
 };
 
-/** Single path segment for /consumer/{stream_id} and /sw/stream/{stream_id} (FastAPI decodes once). */
-const encodeConsumerStreamIdForPath = (streamId: string): string =>
+/** Single path segment for /producer and /consumer paths (FastAPI decodes once). */
+const encodeStreamIdForPath = (streamId: string): string =>
   encodeURIComponent(streamId.trim());
 
-export const getCameraStreamWebSocketUrl = (uuid: string): string => {
-  const safeUuid = encodeConsumerStreamIdForPath(uuid);
-  const origin = getBackendOriginForStreams();
-  const httpUrl = new URL(origin);
+const streamWsUrl = (pathPrefix: 'producer' | 'consumer', streamId: string, originOverride?: string): string => {
+  const id = encodeStreamIdForPath(streamId);
+  const origin = originOverride?.trim() || getBackendOriginForStreams();
+  const base = origin || (typeof window !== 'undefined' ? window.location.origin : '');
+  const httpUrl = new URL(base.startsWith('http') ? base : `https://${base}`);
   const wsProtocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${wsProtocol}//${httpUrl.host}/sw/stream/${safeUuid}`;
+  return `${wsProtocol}//${httpUrl.host}/${pathPrefix}/${id}`;
 };
 
-/** MJPEG multipart stream: same contract as backend GET /consumer/{stream_id}. */
-export const getConsumerMjpegUrl = (streamId: string): string => {
-  const origin = getBackendOriginForStreams();
-  const id = encodeConsumerStreamIdForPath(streamId);
-  return `${origin}/consumer/${id}`;
-};
+/** WebSocket: send binary JPEG frames to the backend producer. */
+export const getProducerWebSocketUrl = (streamId: string): string =>
+  streamWsUrl('producer', streamId);
 
-/** Single JPEG frame: backend GET /consumer/{stream_id}/frame */
+/**
+ * WebSocket: receive processed JPEG (binary) then JSON {@link StreamTrackPayload} per frame.
+ * Connect from the same origin as stream routes (Vite proxies /consumer with WS upgrade).
+ */
+export const getConsumerWebSocketUrl = (streamId: string): string =>
+  streamWsUrl('consumer', streamId);
+
+/** @deprecated Use {@link getProducerWebSocketUrl}. */
+export const getCameraStreamWebSocketUrl = getProducerWebSocketUrl;
+
+/** Single JPEG snapshot: backend GET /consumer/{stream_id}/frame */
 export const getConsumerSnapshotUrl = (streamId: string): string => {
   const origin = getBackendOriginForStreams();
-  const id = encodeConsumerStreamIdForPath(streamId);
+  const id = encodeStreamIdForPath(streamId);
   return `${origin}/consumer/${id}/frame`;
+};
+
+/** Consumer WebSocket URL against an explicit backend origin (custom server). */
+export const getConsumerWebSocketUrlForBase = (backendOriginInput: string, streamId: string): string => {
+  const origin = normalizeConsumeBackendOrigin(backendOriginInput);
+  const base = origin || getBackendOriginForStreams();
+  return streamWsUrl('consumer', streamId, base);
 };
 
 /** Normalize user input: host:port, http(s)://host, or URL ending with /api → origin only. */
@@ -155,23 +139,16 @@ export const normalizeConsumeBackendOrigin = (input: string): string => {
   }
 };
 
-export const getConsumerMjpegUrlForBase = (backendOriginInput: string, streamId: string): string => {
-  const origin = normalizeConsumeBackendOrigin(backendOriginInput);
-  const base = origin || getBackendOriginForStreams();
-  const id = encodeConsumerStreamIdForPath(streamId);
-  return `${base}/consumer/${id}`;
-};
-
 export type AddCameraPayload = Partial<CameraInfo> & {
   streamUuid?: string;
-  /** Host or full URL of the backend that serves GET /consumer/{uuid}. Empty → use Settings backend. */
+  /** Host or full URL of the backend that serves WebSocket /consumer/{uuid}. Empty → use Settings backend. */
   consumerBackendBase?: string;
 };
 
 export const getCameras = async (): Promise<CameraInfo[]> => {
   if (isBackendEnabled()) {
     try {
-      const res = await fetch(`${getBackendUrl()}/cameras`);
+      const res = await fetch(`${getBackendUrl()}/cameras`, { headers: apiAuthHeaders() });
       if (!res.ok) throw new Error('Failed to fetch');
       return await res.json();
     } catch (e) {
@@ -185,7 +162,7 @@ export const getCameras = async (): Promise<CameraInfo[]> => {
 export const getSystemStats = async (): Promise<SystemStats> => {
   if (isBackendEnabled()) {
     try {
-      const res = await fetch(`${getBackendUrl()}/stats`);
+      const res = await fetch(`${getBackendUrl()}/stats`, { headers: apiAuthHeaders() });
       if (!res.ok) throw new Error('Failed to fetch');
       return await res.json();
     } catch (e) {
@@ -210,20 +187,14 @@ export const addCamera = async (cameraData: AddCameraPayload): Promise<boolean> 
     console.error('Invalid backend server for consume URL');
     return false;
   }
-  const imageUrl =
-    cameraData.imageUrl?.trim() ||
-    (streamUuid
-      ? customBase
-        ? getConsumerMjpegUrlForBase(customBase, streamUuid)
-        : getConsumerMjpegUrl(streamUuid)
-      : '');
+  const explicitImage = (cameraData.imageUrl ?? '').trim();
   const location =
     cameraData.location ??
     (consumeOrigin ? `${consumeOrigin} · ${streamUuid}` : streamUuid);
   const body = {
     name: cameraData.name ?? '',
     location,
-    imageUrl: imageUrl || undefined,
+    imageUrl: explicitImage || undefined,
     streamUuid: streamUuid || undefined,
   };
 
@@ -233,6 +204,7 @@ export const addCamera = async (cameraData: AddCameraPayload): Promise<boolean> 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...apiAuthHeaders(),
         },
         body: JSON.stringify(body),
       });
@@ -252,7 +224,9 @@ export const addCamera = async (cameraData: AddCameraPayload): Promise<boolean> 
     location,
     status: 'normal',
     statusText: 'NORMAL',
-    imageUrl: imageUrl || getConsumerMjpegUrl(id),
+    imageUrl:
+      explicitImage ||
+      (streamUuid ? '' : 'https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80&w=600'),
     time: new Date().toLocaleTimeString(),
   };
   MOCK_CAMERAS.push(newCamera);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Shield, LayoutDashboard, Settings, LogOut, HelpCircle, Menu, X, Video } from 'lucide-react';
+import { Shield, LayoutDashboard, Settings, LogOut, HelpCircle, Menu, X, Video, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { isBackendEnabled } from '../../services/apiBase';
 import { Tutorial } from './Tutorial';
 
 interface SidebarProps {
@@ -9,7 +10,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
+  const showUserAdmin = isAdmin && isBackendEnabled();
   const [showTutorial, setShowTutorial] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -51,6 +53,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => 
                 <span className="font-medium">Settings</span>
               </button>
             </li>
+            {showUserAdmin && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => handleNavigate('admin-users')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === 'admin-users' ? 'bg-gray-800/50 text-white' : 'text-guardian-muted hover:text-white hover:bg-gray-800/30'}`}
+                >
+                  <Users className="w-5 h-5" />
+                  <span className="font-medium">Users</span>
+                </button>
+              </li>
+            )}
             <li>
               <button
                 onClick={() => handleNavigate('camera-stream')}
@@ -81,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => 
             </div>
             <div className="flex flex-col min-w-0">
               <span className="text-sm font-semibold truncate">{user?.name}</span>
-              <span className="text-xs text-guardian-muted">{user?.role}</span>
+              <span className="text-xs text-guardian-muted">{user?.roleLabel}</span>
             </div>
           </div>
         </div>

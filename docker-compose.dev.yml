@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: guardian-postgres-dev
+    environment:
+      POSTGRES_USER: guardian
+      POSTGRES_PASSWORD: guardian
+      POSTGRES_DB: guardian
+    volumes:
+      - guardian_pg_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guardian -d guardian"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
   guardian-backend:
     build:
       context: .
@@ -11,6 +28,13 @@ services:
     environment:
       # Windows/macOS Docker bind mounts often miss inotify; polling makes --reload reliable
       WATCHFILES_FORCE_POLLING: "true"
+      GUARDIAN_DATABASE_URL: postgresql+asyncpg://guardian:guardian@postgres:5432/guardian
+      GUARDIAN_JWT_SECRET: ${GUARDIAN_JWT_SECRET:-dev-secret-change-me}
+      GUARDIAN_ADMIN_USERNAME: ${GUARDIAN_ADMIN_USERNAME:-Admin}
+      GUARDIAN_ADMIN_PASSWORD: ${GUARDIAN_ADMIN_PASSWORD:-admin}
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
 #   guardian-frontend:
@@ -30,5 +54,6 @@ services:
 #       - guardian-backend
 #     restart: unless-stopped
 
-# volumes:
+volumes:
+  guardian_pg_data_dev:
 #   guardian_frontend_node_modules:

@@ -4,3 +4,8 @@ numpy
 opencv-python
 onnxruntime
 python-multipart
+supervision>=0.22.0
+sqlalchemy[asyncio]>=2.0
+asyncpg
+python-jose[cryptography]
+bcrypt>=4.0

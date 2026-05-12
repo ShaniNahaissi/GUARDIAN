@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
-import { X, ArrowRight, ArrowLeft, Shield, LayoutDashboard, Camera, Settings, Bell } from 'lucide-react';
+import {
+  X,
+  ArrowRight,
+  ArrowLeft,
+  Shield,
+  LayoutDashboard,
+  Camera,
+  Settings,
+  Video,
+  Users,
+  LogIn,
+} from 'lucide-react';
 
 interface TutorialStep {
   title: string;
@@ -11,32 +22,53 @@ interface TutorialStep {
 const STEPS: TutorialStep[] = [
   {
     title: 'Welcome to Guardian',
-    description: 'Guardian is your real-time weapon detection system. It monitors camera feeds, detects threats, and helps you respond fast. This tutorial will walk you through all the major features.',
+    description:
+      'Guardian is a real-time monitoring UI for camera streams processed by the backend (ONNX detection, tracking, and alerts). You sign in, review the dashboard, open individual cameras, and optionally manage users if you are an administrator.',
     icon: <Shield className="w-12 h-12 text-guardian-accent" />,
+    highlight: 'Use Next to step through the product, or ✕ to close anytime.',
   },
   {
-    title: 'The Dashboard',
-    description: 'The Dashboard shows all your camera feeds at a glance. You can see the threat level of each camera, filter by severity (Critical, Warning, Normal), refresh feeds, and add new cameras.',
+    title: 'Sign in & roles',
+    description:
+      'With the backend API turned on in Settings, you log in with your account. New self-registration creates a viewer: you can browse dashboards and streams but not add servers. Operators and administrators can use Add server on the dashboard. Administrators also see Users in the sidebar to create accounts and change roles.',
+    icon: <LogIn className="w-12 h-12 text-guardian-accent" />,
+    highlight:
+      'Typical Docker bootstrap admin is username Admin and password admin—change the password in production. With mock data enabled you get a simplified offline login (no API).',
+  },
+  {
+    title: 'Dashboard',
+    description:
+      'The home view lists camera cards with status, location, and a View action. Filter by threat label, refresh the list from the API, and add a server entry when your role allows it (links a display name and stream UUID to the backend list).',
     icon: <LayoutDashboard className="w-12 h-12 text-guardian-accent" />,
-    highlight: 'Tip: Use the Filter button to quickly find cameras with active threats.',
+    highlight: 'If Add server is missing, your account is a viewer—ask an admin to grant operator or admin.',
   },
   {
-    title: 'Camera View',
-    description: 'Click "View" on any camera card to enter the Camera View. Here you can see the live feed in full detail, threat detection overlays, and the Threat Panel on the right with AI analysis.',
+    title: 'Camera Stream',
+    description:
+      'Open Camera Stream in the sidebar to work with live WebSockets: the browser can send frames to the backend producer and receive processed JPEG plus track JSON on the consumer for the same stream id. Use the same UUID here as when adding a server on the dashboard.',
+    icon: <Video className="w-12 h-12 text-guardian-accent" />,
+    highlight: 'In local Vite dev, keep the backend URL as /api so TLS and WebSocket proxying stay consistent.',
+  },
+  {
+    title: 'Camera View & alerts',
+    description:
+      'From a card, choose View for a focused layout: live preview, threat panel, Record / Snapshot actions, and an alert banner you can dismiss after triage. Camera cards can also surface manual alert controls depending on configuration.',
     icon: <Camera className="w-12 h-12 text-guardian-accent" />,
-    highlight: 'Tip: Use the Record button to start capturing footage. Click Stop Record to finish and send the video to the backend.',
+    highlight: 'Record toggles capture UI; Snapshot logs a still—both are wired for future backend persistence.',
   },
   {
-    title: 'Alerts & Actions',
-    description: 'When a threat is detected, a red Alert Banner appears at the top of the camera view. You can close it once acknowledged. Each camera card also has an Alert button to manually flag an incident.',
-    icon: <Bell className="w-12 h-12 text-guardian-danger" />,
-    highlight: 'Tip: Click Snapshot on the Camera View to instantly capture and log an image of a detected threat.',
+    title: 'User management (admins)',
+    description:
+      'If you are signed in as an administrator with the backend enabled, Users appears in the sidebar. There you can list accounts, add users with passwords and roles, edit roles or names, reset passwords, and delete users (you cannot remove yourself or the last admin).',
+    icon: <Users className="w-12 h-12 text-guardian-accent" />,
+    highlight: 'Viewers never see this menu; it is hidden in mock-only mode.',
   },
   {
-    title: 'Settings',
-    description: 'Go to Settings from the sidebar to configure the data source. By default, Guardian uses the Backend API. You can switch to Mock Data for development and testing without a live backend.',
+    title: 'Settings & data source',
+    description:
+      'Settings controls whether the app calls the real Guardian API or uses built-in mock cameras and stats. You can also override the backend base URL (for packaged builds, dev often uses /api behind HTTPS).',
     icon: <Settings className="w-12 h-12 text-guardian-accent" />,
-    highlight: 'Tip: The Backend URL defaults from the .env file but can be overridden in Settings.',
+    highlight: 'After changing URL or toggling mock/backend, refresh the dashboard so lists and auth line up with the new target.',
   },
 ];
 

@@ -4,7 +4,7 @@ Onboarding for **new developers** and **AI coding agents**. Read this file first
 
 ## Project goal
 
-Guardian is a proof-of-concept **real-time monitoring** app: camera or edge streams frames to a **Python backend**, **ONNX** inference draws detections, and the **React** UI lists cameras, shows a processed **MJPEG** feed, and supports WebSocket ingest.
+Guardian is a proof-of-concept **real-time monitoring** app: camera or edge streams **JPEG frames** to a **Python backend**, **ONNX** inference plus **ByteTrack** produce detections with persistent IDs, and the **React** UI lists cameras, shows a processed feed via **WebSocket consumer** (binary JPEG + JSON), and supports WebSocket producer ingest.
 
 ## Architecture (short)
 
@@ -12,36 +12,36 @@ Guardian is a proof-of-concept **real-time monitoring** app: camera or edge stre
 |-------|------|------------------|
 | UI | Vite, React 19, TS, Tailwind v4 | Dashboard, settings, camera view, stream upload page |
 | API | FastAPI | REST under **`/api/*`**, health, camera CRUD, stream meta |
-| Streams | FastAPI + Starlette | **`WS /sw/stream/{id}`** ingest; **`GET /consumer/{id}`** MJPEG out; **`GET /consumer/{id}/frame`** JPEG snapshot |
-| Inference | ONNX Runtime, OpenCV, NumPy | Decode frame → run model → draw boxes → store latest processed JPEG |
-| Deploy | Docker, nginx (frontend image) | TLS backend; nginx proxies `/api`, `/sw`, `/consumer` to backend |
+| Streams | FastAPI + Starlette | **`WS /producer/{id}`** ingest (JPEG bytes); **`WS /consumer/{id}`** processed JPEG + track JSON; **`GET /consumer/{id}/frame`** JPEG snapshot |
+| Inference | ONNX Runtime, OpenCV, NumPy, supervision ByteTrack | Decode → ONNX → track → draw → broadcast |
+| Deploy | Docker, nginx (frontend image) | TLS backend; nginx proxies `/api`, `/producer`, `/consumer`, `/health` to backend |
 
-**Critical path**: Producer and consumer must share the **same `stream_id`**. Consumer output exists only after the backend has **stored** a processed frame for that id.
+**Critical path**: Producer and consumer must share the **same `stream_id`**. Consumer sockets receive frames only after the producer has sent at least one decodable image for that id.
 
 ## Repository map
 
-- **`backend/main.py`** — Single service: models, routes, middleware (audit/latency), WebSocket producer, MJPEG consumer.
-- **`frontend/app/src/services/dataService.ts`** — **Only** place for API/stream URL helpers (`getBackendUrl`, `getConsumerMjpegUrl`, WebSocket URL builder, add camera payload).
+- **`backend/main.py`** — Single service: models, routes, middleware (audit/latency), WebSocket producer/consumer, ONNX + ByteTrack.
+- **`frontend/app/src/services/dataService.ts`** — **Only** place for API/stream URL helpers (`getBackendUrl`, `getProducerWebSocketUrl`, `getConsumerWebSocketUrl`, `getConsumerSnapshotUrl`, add camera payload).
 - **`frontend/app/src/App.tsx`** — View state machine (`dashboard` | `camera` | `settings` | `add-camera` | `camera-stream`); no `react-router`.
 - **`trained_model/guardian_backend_model.onnx`** — Expected model path (see backend startup).
 
 ## Invariants (do not break without updating docs)
 
 1. **Frontend data access** goes through **`dataService.ts`** (mock vs backend switch via `localStorage` / env).
-2. **Stream URLs** — REST lives under **`/api`**; **MJPEG and WebSocket** live at **origin root**: **`/consumer/{id}`**, **`/sw/stream/{id}`** (not under `/api`).
-3. **Dev proxy** — Vite proxies `/api`, `/sw`, `/consumer`, `/health` to **`https://127.0.0.1:8000`** by default (`GUARDIAN_API_PROXY` override).
+2. **Stream URLs** — REST lives under **`/api`**; **stream WebSockets and snapshot** live at **origin root**: **`/producer/{id}`**, **`/consumer/{id}`** (WS), **`/consumer/{id}/frame`** (GET) (not under `/api`).
+3. **Dev proxy** — Vite proxies `/api`, `/producer`, `/consumer`, `/health` to **`https://127.0.0.1:8000`** by default (`GUARDIAN_API_PROXY` override).
 4. **TypeScript** — `verbatimModuleSyntax`: use `import type` for type-only imports.
 
 ## Known bug / gap (document for QA)
 
-**Stream consume not working — Network status stuck in Pending**
+**Consumer WebSocket shows “Waiting for frames”**
 
-- Observed when opening **`GET /consumer/{stream_id}`** (or same-origin proxied URL) in the browser: request remains **Pending** in DevTools.
+- The dashboard opens **`WS /consumer/{stream_id}`**; frames appear only after **`WS /producer/{stream_id}`** receives valid **JPEG/PNG** bytes (same id).
 - **Root causes to verify** (see **`DEV.md`**):
-  - No processed frames in **`StreamStore`** for that id (producer not sending valid **image** bytes, or id mismatch).
-  - MJPEG long-poll / proxy buffering behavior.
-  - TLS / mixed-content / wrong base URL.
-- **Next engineering steps**: Add backend metrics or logging when the consumer connects but `get_processed` is empty for N seconds; consider sending an initial placeholder frame or HTTP 204/503 policy; verify Vite proxy streaming; add E2E test with synthetic JPEG over WS then assert consumer headers/body.
+  - Producer not running, wrong `stream_id`, or non-image payloads (`imdecode` fails).
+  - TLS / mixed-content / wrong origin (use same-origin proxied URLs in Vite dev).
+  - Nginx missing `Upgrade` / `Connection` headers for `/consumer` or `/producer`.
+- **Next engineering steps**: Metrics for frames in/out per `stream_id`; optional placeholder JPEG on first consumer connect; Playwright E2E with synthetic JPEG over producer WS.
 
 ## Suggested read order
 
@@ -53,10 +53,10 @@ Guardian is a proof-of-concept **real-time monitoring** app: camera or edge stre
 
 ### Stream / media pipeline
 
-- [ ] **Fix consumer Pending**: reproduce with one `stream_id`; confirm `store.processed_frames[id]` updates; fix producer payload or consumer idle behavior.
+- [ ] **Consumer idle UX**: when `WS /consumer/{id}` has no producer yet, show clearer “no frames” vs error states; optional placeholder frame from backend.
 - [ ] Document or implement **chunked video** path if product must use **MediaRecorder WebM** (transcode server-side or switch client to **JPEG snapshots** over WS).
 - [ ] **HLS** (`.m3u8`) support in **`CameraView`** for Chrome via **hls.js** (Safari native).
-- [ ] **Snapshot fallback**: if MJPEG fails in `<img>`, try **`/consumer/{id}/frame`** on an interval (already exposed in `dataService`).
+- [ ] **Snapshot fallback**: if the consumer WebSocket is unavailable, poll **`GET /consumer/{id}/frame`** on an interval (see `getConsumerSnapshotUrl` in `dataService.ts`).
 
 ### Backend
 

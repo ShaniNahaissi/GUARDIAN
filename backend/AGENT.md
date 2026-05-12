@@ -3,12 +3,14 @@
 ## Goal
 - Python backend that receives video frames from frontend on a producer route.
 - Runs inference with ONNX model: `trained_model/guardian_backend_model.onnx`.
-- Exposes processed video on consumer routes for frontend display.
+- ByteTrack (via `supervision`) assigns persistent `track_id` per `stream_id`.
+- Consumers receive processed JPEG + JSON over WebSocket.
 
 ## Stack
 - FastAPI + Uvicorn
-- ONNX Runtime
+- ONNX Runtime (CPU or CUDA when available)
 - OpenCV + NumPy
+- `supervision` (ByteTrack)
 
 ## Files
 - `backend/main.py`: full backend service.
@@ -19,21 +21,27 @@
 - `backend/docker-compose.dev.yml`: dev compose with bind-mount + auto-reload.
 
 ## Routes
-- `GET /health`: backend and model status.
+- `GET /health`: backend, model, and ORT provider status.
 - `GET /api/cameras`: camera list for frontend dashboard.
 - `POST /api/cameras`: add a camera.
-- `GET /api/stats`: simple aggregated stats for frontend.
-- `WS /sw/stream/{stream_id}`: producer route (ingest frames).
-- `GET /consumer/{stream_id}`: MJPEG consumer stream of processed frames.
-- `GET /consumer/{stream_id}/frame`: latest processed frame snapshot (JPEG).
-- `GET /api/streams/{stream_id}/meta`: detection metadata (count/max confidence).
+- `GET /api/stats`: simple aggregated stats for the frontend.
+- `WS /producer/{stream_id}`: producer ingest (**binary JPEG or PNG per message**).
+- `WS /consumer/{stream_id}`: consumer stream — for each processed frame the server sends **(1) binary** processed JPEG bytes, **(2) text JSON** with `{ stream_id, frame_seq, tracks: [{ track_id, bbox, class_name, confidence }] }`.
+- `GET /consumer/{stream_id}/frame`: latest processed JPEG snapshot (404 until a frame exists).
+- `GET /api/streams/{stream_id}/meta`: detection metadata (count / max confidence).
 
-## Producer/Consumer Contract
-- Producer expects each WebSocket message to be an encoded image frame (`jpeg/png` bytes).
-- Backend decodes frame, runs ONNX detection, draws boxes, stores latest processed frame.
-- Consumer returns processed output:
-  - Continuous MJPEG stream (`/consumer/{stream_id}`)
-  - Single latest JPEG frame (`/consumer/{stream_id}/frame`)
+## Producer / consumer contract
+- Producer: each WebSocket message is **one encoded image** (`jpeg`/`png` bytes). The backend decodes with `cv2.imdecode`, runs ONNX + ByteTrack, draws boxes, then broadcasts to all consumer sockets for that `stream_id`.
+- Consumer WebSocket: messages arrive in **pairs** (binary JPEG, then JSON). Clients should use the same `stream_id` as the producer.
+- Snapshot: `GET /consumer/{stream_id}/frame` returns a single JPEG body.
+
+## Class names
+- Optional env `GUARDIAN_CLASS_NAMES` as `0:knife,1:gun` (comma-separated `id:name`).
+- Optional `trained_model/names.txt` (one name per line, 0-based index).
+
+## ORT providers
+- Set `GUARDIAN_ORT_CUDA=0` to force CPU only.
+- Set `GUARDIAN_ORT_TRT=1` to allow TensorRT when the build supports it.
 
 ## TLS / HTTPS
 - Docker images run Uvicorn with **HTTPS on port 8000** by default (self-signed cert generated in-container unless you mount real certs).
@@ -84,6 +92,5 @@ docker compose -f docker-compose.dev.yml up --build
 ## Frontend Integration
 - Point `VITE_BACKEND_URL` (or Settings) at `https://localhost:8000/api` when talking to the container or TLS Uvicorn directly. Trust or accept the self-signed certificate in the browser when testing.
 - Production Docker: nginx proxies to `https://guardian-backend:8000` with `proxy_ssl_verify off` for the internal self-signed cert.
-- Stream WebSocket URL builder uses `wss:` when the API base is `https:`.
-- If frontend sends `MediaRecorder` webm chunks, backend cannot decode each chunk as image frame.
-- For full real-time detection, frontend should send JPEG frames (for example canvas snapshots) over WebSocket producer route.
+- Producer WebSocket URL builder: `wss:` when the page is `https:`.
+- If the frontend sends non-image binary, `imdecode` fails and that frame is skipped.

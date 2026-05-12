@@ -3,7 +3,7 @@ import { ArrowLeft, Video, VideoOff, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '../components/atoms/Button';
 import { Card } from '../components/atoms/Card';
 import { useToast } from '../context/ToastContext';
-import { getCameraStreamWebSocketUrl } from '../services/dataService';
+import { getProducerWebSocketUrl } from '../services/dataService';
 
 interface CameraStreamPageProps {
   onBack: () => void;
@@ -14,23 +14,6 @@ const createDefaultStreamId = () => {
     return crypto.randomUUID();
   }
   return `stream-${Date.now()}`;
-};
-
-const getSupportedMimeType = (): string | null => {
-  const candidates = [
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
-    'video/mp4',
-  ];
-
-  for (const mimeType of candidates) {
-    if (MediaRecorder.isTypeSupported(mimeType)) {
-      return mimeType;
-    }
-  }
-
-  return null;
 };
 
 const getReadableMediaError = (error: unknown): string => {
@@ -56,6 +39,9 @@ const getReadableMediaError = (error: unknown): string => {
   return 'Could not start camera streaming';
 };
 
+const JPEG_QUALITY = 0.85;
+const JPEG_INTERVAL_MS = 120;
+
 export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) => {
   const [streamUuid, setStreamUuid] = useState<string>(() => createDefaultStreamId());
   const [isStreaming, setIsStreaming] = useState(false);
@@ -64,20 +50,22 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [statusMessage, setStatusMessage] = useState('Ready to start stream');
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const fileStreamIntervalRef = useRef<number | null>(null);
+  const jpegIntervalRef = useRef<number | null>(null);
+  const fileObjectUrlRef = useRef<string | null>(null);
   const { showToast } = useToast();
 
-  const stopStreaming = () => {
-    if (fileStreamIntervalRef.current !== null) {
-      window.clearInterval(fileStreamIntervalRef.current);
-      fileStreamIntervalRef.current = null;
+  const clearJpegInterval = () => {
+    if (jpegIntervalRef.current !== null) {
+      window.clearInterval(jpegIntervalRef.current);
+      jpegIntervalRef.current = null;
     }
+  };
 
-    mediaRecorderRef.current?.stop();
-    mediaRecorderRef.current = null;
+  const stopStreaming = () => {
+    clearJpegInterval();
 
     if (wsRef.current) {
       wsRef.current.close();
@@ -89,8 +77,15 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
       mediaStreamRef.current = null;
     }
 
+    if (fileObjectUrlRef.current) {
+      URL.revokeObjectURL(fileObjectUrlRef.current);
+      fileObjectUrlRef.current = null;
+    }
+
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+      videoRef.current.src = '';
+      videoRef.current.removeAttribute('src');
     }
 
     setIsStreaming(false);
@@ -104,6 +99,61 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
     };
   }, []);
 
+  const startJpegPump = () => {
+    clearJpegInterval();
+    jpegIntervalRef.current = window.setInterval(() => {
+      const v = videoRef.current;
+      const ws = wsRef.current;
+      const canvas = canvasRef.current;
+      if (!v || !canvas || !ws || ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      if (v.readyState < 2 || v.videoWidth === 0 || v.videoHeight === 0) {
+        return;
+      }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return;
+      }
+      canvas.width = v.videoWidth;
+      canvas.height = v.videoHeight;
+      ctx.drawImage(v, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          if (blob && ws.readyState === WebSocket.OPEN) {
+            ws.send(blob);
+          }
+        },
+        'image/jpeg',
+        JPEG_QUALITY,
+      );
+    }, JPEG_INTERVAL_MS);
+  };
+
+  const openProducerSocket = (onReady: () => void) => {
+    const wsUrl = getProducerWebSocketUrl(streamUuid);
+    setStatusMessage(`Connecting to ${wsUrl}`);
+    const socket = new WebSocket(wsUrl);
+    wsRef.current = socket;
+    socket.binaryType = 'arraybuffer';
+
+    socket.onopen = () => {
+      setIsSocketConnected(true);
+      setStatusMessage('WebSocket connected. Sending JPEG frames.');
+      onReady();
+    };
+
+    socket.onclose = () => {
+      setIsSocketConnected(false);
+      clearJpegInterval();
+      setStatusMessage('WebSocket disconnected');
+    };
+
+    socket.onerror = () => {
+      setStatusMessage('WebSocket error');
+    };
+  };
+
   const startStreaming = async () => {
     if (!streamUuid.trim()) {
       showToast('Please provide a stream UUID', 'error');
@@ -113,17 +163,6 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
     if (!navigator.mediaDevices?.getUserMedia) {
       showToast('Camera API not available. Use HTTPS or localhost.', 'error');
       setStatusMessage('Camera API unavailable');
-      return;
-    }
-
-    if (typeof MediaRecorder === 'undefined') {
-      showToast('MediaRecorder is not supported in this browser', 'error');
-      return;
-    }
-
-    const mimeType = getSupportedMimeType();
-    if (!mimeType) {
-      showToast('No supported recording format found', 'error');
       return;
     }
 
@@ -148,49 +187,13 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
       }
 
       if (sendToBackend) {
-        const wsUrl = getCameraStreamWebSocketUrl(streamUuid);
-        setStatusMessage(`Connecting to ${wsUrl}`);
-        const socket = new WebSocket(wsUrl);
-        wsRef.current = socket;
-        socket.binaryType = 'arraybuffer';
-
-        socket.onopen = () => {
-          setIsSocketConnected(true);
-          setStatusMessage('WebSocket connected. Streaming started.');
-        };
-
-        socket.onclose = () => {
-          setIsSocketConnected(false);
-          setStatusMessage('WebSocket disconnected');
-        };
-
-        socket.onerror = () => {
-          setStatusMessage('WebSocket error (camera still running)');
-        };
+        openProducerSocket(() => {
+          startJpegPump();
+        });
       } else {
-        setStatusMessage('Offline demo mode: camera chunks are generated locally');
+        setStatusMessage('Local preview only (not sending to backend)');
       }
 
-      const recorder = new MediaRecorder(mediaStream, { mimeType, videoBitsPerSecond: 1_000_000 });
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = async (event: BlobEvent) => {
-        if (event.data.size === 0 || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-          return;
-        }
-        try {
-          const payload = await event.data.arrayBuffer();
-          wsRef.current.send(payload);
-        } catch (error) {
-          console.error('Failed to send media chunk', error);
-        }
-      };
-
-      recorder.onerror = () => {
-        setStatusMessage('Recorder error');
-      };
-
-      recorder.start(500);
       setIsStreaming(true);
       showToast('Camera stream started', 'success');
     } catch (error) {
@@ -209,72 +212,54 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
     }
 
     const objectUrl = URL.createObjectURL(selectedFile);
+    fileObjectUrlRef.current = objectUrl;
+
     if (videoRef.current) {
       videoRef.current.srcObject = null;
       videoRef.current.src = objectUrl;
       void videoRef.current.play().catch(() => {
-        // User gesture usually already exists from button click.
+        /* user gesture present from button */
       });
     }
 
-    if (sendToBackend) {
-      const wsUrl = getCameraStreamWebSocketUrl(streamUuid);
-      setStatusMessage(`Connecting to ${wsUrl}`);
-      const socket = new WebSocket(wsUrl);
-      wsRef.current = socket;
-      socket.binaryType = 'arraybuffer';
-      socket.onopen = () => {
-        setIsSocketConnected(true);
-        setStatusMessage('WebSocket connected. Streaming file chunks...');
-      };
-      socket.onclose = () => {
-        setIsSocketConnected(false);
-      };
-      socket.onerror = () => {
-        setStatusMessage('WebSocket error (offline file demo still running)');
-      };
-    } else {
-      setStatusMessage('Offline demo mode: streaming file chunks locally');
-    }
-
-    const chunkSize = 64 * 1024;
-    let offset = 0;
-    setIsStreaming(true);
-    showToast('File streaming started', 'success');
-
-    fileStreamIntervalRef.current = window.setInterval(async () => {
-      if (offset >= selectedFile.size) {
+    const v = videoRef.current;
+    if (v) {
+      const onEnded = () => {
         stopStreaming();
         setStatusMessage('File stream completed');
         showToast('File stream completed', 'success');
-        URL.revokeObjectURL(objectUrl);
-        return;
-      }
+      };
+      v.addEventListener('ended', onEnded, { once: true });
+    }
 
-      const chunk = selectedFile.slice(offset, offset + chunkSize);
-      offset += chunkSize;
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        const data = await chunk.arrayBuffer();
-        wsRef.current.send(data);
-      }
-    }, 200);
+    if (sendToBackend) {
+      openProducerSocket(() => {
+        startJpegPump();
+      });
+    } else {
+      setStatusMessage('Playing file locally (not sending to backend)');
+    }
+
+    setIsStreaming(true);
+    showToast('File streaming started', 'success');
   };
 
-  const wsUrlPreview = streamUuid.trim() ? getCameraStreamWebSocketUrl(streamUuid) : '';
+  const wsUrlPreview = streamUuid.trim() ? getProducerWebSocketUrl(streamUuid) : '';
 
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3 sm:items-center sm:gap-4">
-        <button onClick={onBack} className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
+        <button type="button" onClick={onBack} className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
           <ArrowLeft className="w-6 h-6" />
         </button>
         <div>
           <h2 className="text-xl sm:text-2xl font-bold mb-1">Camera Stream</h2>
-          <p className="text-guardian-muted text-sm">Continuously stream camera video to backend WebSocket</p>
+          <p className="text-guardian-muted text-sm">Send JPEG frames to the backend producer WebSocket</p>
         </div>
       </div>
 
       <Card className="p-4 sm:p-6 space-y-5">
+        <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
         <div className="space-y-2">
           <label className="block text-sm font-medium text-guardian-muted">Stream UUID</label>
           <input
@@ -285,7 +270,7 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
             placeholder="camera-uuid"
             disabled={isStreaming}
           />
-          <p className="text-xs text-guardian-muted break-all">Target socket: {wsUrlPreview || '-'}</p>
+          <p className="text-xs text-guardian-muted break-all">Producer: {wsUrlPreview || '-'}</p>
         </div>
 
         <label className="flex items-center gap-3 text-sm text-guardian-muted">
@@ -295,7 +280,7 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
             onChange={(e) => setSendToBackend(e.target.checked)}
             disabled={isStreaming}
           />
-          Send chunks to backend WebSocket
+          Send JPEG frames to backend WebSocket
         </label>
 
         <div className="space-y-2">
@@ -321,7 +306,7 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
           </div>
           <div className="flex w-full sm:w-auto gap-2">
             {!isStreaming ? (
-              <Button className="flex-1 sm:flex-none" onClick={startStreaming}>
+              <Button className="flex-1 sm:flex-none" onClick={() => void startStreaming()}>
                 <Video className="w-4 h-4" /> Start Streaming
               </Button>
             ) : (

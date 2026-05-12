@@ -6,6 +6,7 @@ import { AlertBanner } from '../components/molecules/AlertBanner';
 import { ArrowLeft, CircleDot, Camera, Maximize } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { getCameras } from '../services/dataService';
+import { LiveStreamPreview } from '../components/molecules/LiveStreamPreview';
 import type { CameraInfo } from '../services/dataService';
 
 interface CameraViewProps {
@@ -13,7 +14,7 @@ interface CameraViewProps {
   onBack: () => void;
 }
 
-/** MJPEG and still URLs work in <img>. HLS / file-like video URLs need <video>. */
+/** HTTP(S) image or video URLs work in <img> / <video>. Empty imageUrl uses WS consumer live preview. */
 const isVideoElementSource = (url: string): boolean => {
   const lower = url.trim().toLowerCase();
   if (!lower) return false;
@@ -124,29 +125,29 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
           </div>
 
           <div className="flex-1 relative flex items-center justify-center bg-gray-900">
-            {streamUrl ? (
-              useVideo ? (
-                <video
-                  ref={videoRef}
-                  key={streamUrl}
-                  src={streamUrl}
-                  autoPlay
-                  playsInline
-                  muted
-                  controls
-                  className="absolute inset-0 w-full h-full object-cover opacity-90"
-                  onError={() => showToast('Video stream failed to load. Check URL and CORS.', 'error')}
-                />
-              ) : (
-                <img
-                  src={streamUrl}
-                  alt="Camera feed"
-                  className="absolute inset-0 w-full h-full object-cover opacity-90"
-                  onError={() => showToast('Feed URL failed to load.', 'error')}
-                />
-              )
+            {!streamUrl.trim() ? (
+              <div className="absolute inset-0">
+                <LiveStreamPreview streamId={cameraId} />
+              </div>
+            ) : useVideo ? (
+              <video
+                ref={videoRef}
+                key={streamUrl}
+                src={streamUrl}
+                autoPlay
+                playsInline
+                muted
+                controls
+                className="absolute inset-0 w-full h-full object-cover opacity-90"
+                onError={() => showToast('Video stream failed to load. Check URL and CORS.', 'error')}
+              />
             ) : (
-              <p className="text-guardian-muted text-sm px-4 text-center">No stream URL set for this camera (imageUrl).</p>
+              <img
+                src={streamUrl}
+                alt="Camera feed"
+                className="absolute inset-0 w-full h-full object-cover opacity-90"
+                onError={() => showToast('Feed URL failed to load.', 'error')}
+              />
             )}
             <div className="absolute border-2 border-red-500 w-36 h-48 sm:w-48 sm:h-64 top-1/3 left-1/3 shadow-[0_0_15px_rgba(239,68,68,0.5)] pointer-events-none" />
           </div>

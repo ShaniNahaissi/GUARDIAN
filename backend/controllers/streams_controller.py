@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+
+import cv2
+import numpy as np
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse, StreamingResponse
+
+from bl.detection import state as det_state
+from bl.detection.pipeline import process_frame_pipeline
+from bl.detection.streaming import connection_manager, store
+from bl.detection.tracker import remove_byte_tracker
+from bl.rbac import CAMERAS_READ
+from dependencies.security import require_permission
+from models.user import User
+
+logger = logging.getLogger("guardian.audit")
+
+router = APIRouter(tags=["streams"])
+
+
+@router.get("/api/streams/{stream_id}/meta")
+async def stream_meta(stream_id: str, _user: User = Depends(require_permission(CAMERAS_READ))) -> JSONResponse:
+    return JSONResponse(await store.get_meta(stream_id))
+
+
+@router.websocket("/producer/{stream_id}")
+async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
+    await websocket.accept()
+    client_host = websocket.client.host if websocket.client else "unknown"
+    logger.info("stream.producer.connected stream_id=%s client=%s", stream_id, client_host)
+    detector = det_state.detector
+    if detector is None:
+        logger.error("stream.producer.reject stream_id=%s reason=model_not_loaded", stream_id)
+        await websocket.close(code=1011)
+        return
+
+    frame_count = 0
+    try:
+        while True:
+            start = time.perf_counter()
+            payload = await websocket.receive_bytes()
+            array = np.frombuffer(payload, dtype=np.uint8)
+            frame = cv2.imdecode(array, cv2.IMREAD_COLOR)
+            if frame is None:
+                logger.warning(
+                    "stream.producer.decode_failed stream_id=%s payload_bytes=%s",
+                    stream_id,
+                    len(payload),
+                )
+                continue
+
+            frame_count += 1
+            try:
+                jpeg_bytes, track_payload, detections = await asyncio.to_thread(
+                    process_frame_pipeline,
+                    stream_id,
+                    frame,
+                    detector,
+                )
+            except Exception:
+                logger.exception("stream.producer.process_failed stream_id=%s frame=%s", stream_id, frame_count)
+                continue
+
+            await store.update(stream_id, payload, jpeg_bytes, detections)
+            await connection_manager.broadcast_frame(stream_id, jpeg_bytes, track_payload)
+
+            if frame_count % 30 == 0:
+                process_ms = (time.perf_counter() - start) * 1000
+                logger.info(
+                    "stream.producer.frame stream_id=%s frame=%s input_bytes=%s output_bytes=%s tracks=%s process_ms=%.2f",
+                    stream_id,
+                    frame_count,
+                    len(payload),
+                    len(jpeg_bytes),
+                    len(track_payload["tracks"]),
+                    process_ms,
+                )
+    except WebSocketDisconnect:
+        logger.info("stream.producer.disconnected stream_id=%s frames=%s", stream_id, frame_count)
+    except Exception:
+        logger.exception("stream.producer.error stream_id=%s frames=%s", stream_id, frame_count)
+        raise
+    finally:
+        remove_byte_tracker(stream_id)
+
+
+@router.websocket("/consumer/{stream_id}")
+async def consumer_websocket(websocket: WebSocket, stream_id: str) -> None:
+    await websocket.accept()
+    client_host = websocket.client.host if websocket.client else "unknown"
+    logger.info("stream.consumer.ws_connected stream_id=%s client=%s", stream_id, client_host)
+    await connection_manager.connect_consumer(stream_id, websocket)
+    try:
+        while True:
+            message = await websocket.receive()
+            mtype = message.get("type")
+            if mtype == "websocket.disconnect":
+                break
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await connection_manager.disconnect_consumer(stream_id, websocket)
+        logger.info("stream.consumer.ws_disconnected stream_id=%s client=%s", stream_id, client_host)
+
+
+@router.get("/consumer/{stream_id}/frame")
+async def consumer_snapshot(stream_id: str) -> StreamingResponse:
+    frame = await store.get_processed(stream_id)
+    if frame is None:
+        raise HTTPException(status_code=404, detail="No processed frame for stream")
+    return StreamingResponse(iter([frame]), media_type="image/jpeg")

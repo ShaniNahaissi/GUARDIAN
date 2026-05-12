@@ -4,9 +4,9 @@ Orientation for humans running and changing the Guardian stack (weapon-detection
 
 ## What this repo is
 
-- **Backend**: FastAPI + Uvicorn (HTTPS in Docker by default), ONNX Runtime + OpenCV for YOLO-style detection, in-memory frame store, WebSocket producer and MJPEG consumer routes.
+- **Backend**: FastAPI + Uvicorn (HTTPS in Docker by default), ONNX Runtime + OpenCV + supervision ByteTrack, in-memory frame store, WebSocket producer/consumer and JPEG snapshot route.
 - **Frontend**: Vite + React + TypeScript + Tailwind v4, mock-or-backend data layer, no React Router (view state in `App.tsx`).
-- **Ops**: Docker Compose for backend (and optional full stack), nginx in the production frontend image proxying `/api`, `/sw`, `/consumer`, `/health` to the backend.
+- **Ops**: Docker Compose for backend (and optional full stack), nginx in the production frontend image proxying `/api`, `/producer`, `/consumer`, `/health` to the backend.
 
 ## Repository layout
 
@@ -28,26 +28,29 @@ GUARDIAN/
 flowchart LR
   subgraph ingest [Ingest]
     FE_CAM[Camera / Stream UI]
-    WS["WS /sw/stream/{id}"]
+    WS["WS /producer/{id}"]
   end
   subgraph backend [Backend]
     DEC[Decode JPEG frame]
     ONNX[ONNX detect]
+    BT[ByteTrack]
     DRAW[Draw boxes]
     STORE[(StreamStore)]
+    BCAST[Broadcast consumers]
   end
   subgraph consume [Consume]
-    MJPEG["GET /consumer/{id}"]
+    CWS["WS /consumer/{id}"]
     SNAP["GET /consumer/{id}/frame"]
   end
   FE_CAM --> WS
-  WS --> DEC --> ONNX --> DRAW --> STORE
-  STORE --> MJPEG
+  WS --> DEC --> ONNX --> BT --> DRAW --> STORE
+  DRAW --> BCAST
+  BCAST --> CWS
   STORE --> SNAP
 ```
 
-- **Producer contract**: WebSocket messages should be **decodable image bytes** (e.g. JPEG/PNG). The backend uses `cv2.imdecode`; arbitrary **MediaRecorder WebM chunks** are not valid single frames without a different pipeline.
-- **Consumer contract**: `GET /consumer/{stream_id}` returns **multipart MJPEG** (`multipart/x-mixed-replace; boundary=frame`). The **same** `stream_id` must be used on the producer and when registering cameras in the UI.
+- **Producer contract**: WebSocket messages should be **decodable image bytes** (e.g. JPEG/PNG), one frame per message. The Camera Stream page sends **canvas JPEG** snapshots at a fixed interval.
+- **Consumer contract**: `WS /consumer/{stream_id}` delivers **binary JPEG** then **JSON** `{ stream_id, frame_seq, tracks: [...] }` per processed frame. The **same** `stream_id` must be used on the producer, consumer, and when registering cameras in the UI. **`GET /consumer/{stream_id}/frame`** returns the latest JPEG (404 until a frame exists).
 
 ## Local development
 
@@ -63,25 +66,25 @@ From `backend/` (see `backend/AGENT.md`):
 From `frontend/app/`:
 
 - `npm install`
-- `npm run dev -- --host` — dev server uses HTTPS (basic SSL plugin) and proxies `/api`, `/sw`, `/consumer`, `/health` to `GUARDIAN_API_PROXY` (default `https://127.0.0.1:8000`).
+- `npm run dev -- --host` — dev server uses HTTPS (basic SSL plugin) and proxies `/api`, `/producer`, `/consumer`, `/health` to `GUARDIAN_API_PROXY` (default `https://127.0.0.1:8000`).
 
 **Settings / API URL in dev**: Prefer **`/api`** so the browser stays same-origin and the Vite proxy terminates TLS to the backend. Direct `https://localhost:8000/api` from the browser can hit self-signed certificate friction.
 
 Details: `frontend/AGENT.md`, `frontend/README.md`.
 
-## Known issue: consumer / stream “stuck” in Pending (DevTools)
+## Known issue: consumer shows no live image
 
-Symptoms: In Chrome (or similar), the request to **`/consumer/{stream_id}`** (or the proxied equivalent on the Vite origin) stays in **Pending** for a long time or indefinitely.
+Symptoms: Dashboard or camera view stays on **“Waiting for frames”** for a `stream_id`.
 
 Likely causes (check in order):
 
-1. **No frames in `StreamStore` yet** — The consumer generator **waits until** `get_processed(stream_id)` returns data. Until the producer WebSocket has sent at least one **successful** decode + encode cycle for that `stream_id`, the MJPEG stream may not emit bytes the way the browser expects, and the connection can look idle or “pending”.
-2. **`stream_id` mismatch** — Producer uses one id; camera / URL uses another (case, encoding, typo).
-3. **Wrong payload on producer** — If chunks are not valid image bytes, decode fails and **nothing** is stored; consumer never progresses meaningfully.
-4. **Proxy buffering** — Long-lived MJPEG through nginx/Vite can buffer differently; production nginx sets `proxy_buffering off` for `/consumer/`; dev proxy should be checked if behavior differs.
-5. **TLS / mixed content** — Page HTTPS calling HTTP consumer URL (or vice versa) can fail or hang depending on browser; align origins and use `/consumer` through the same proxy as the page when possible.
+1. **No producer for that id** — Open **`WS /producer/{stream_id}`** (Camera Stream page) and send JPEG frames; until `imdecode` succeeds, consumers receive nothing.
+2. **`stream_id` mismatch** — Producer, consumer, and camera registration must use the **same** id (watch URL encoding).
+3. **Wrong payload on producer** — Non-image binary causes decode skip; use the in-app JPEG pump or valid image bytes.
+4. **Proxy / WebSocket** — Vite and nginx must forward **`Upgrade`** and **`Connection`** for `/producer` and `/consumer`.
+5. **TLS / mixed content** — Page `https:` must use `wss:` to the same origin or trusted proxy.
 
-**Action items** for a fix are tracked in the root **`AGENT.md`** TODO list.
+**Action items** for follow-up are tracked in the root **`AGENT.md`** TODO list.
 
 ## Related docs
 

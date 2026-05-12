@@ -6,19 +6,30 @@ import { LoginPage } from './pages/LoginPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AddCameraPage } from './pages/AddCameraPage';
 import { CameraStreamPage } from './pages/CameraStreamPage';
+import { AdminUsersPage } from './pages/AdminUsersPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
+type AppView = 'dashboard' | 'camera' | 'settings' | 'add-camera' | 'camera-stream' | 'admin-users';
+
 function AppContent() {
-  const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'camera' | 'settings' | 'add-camera' | 'camera-stream'>('dashboard');
+  const { user, sessionRestored } = useAuth();
+  const [currentView, setCurrentView] = useState<AppView>('dashboard');
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
+
+  if (!sessionRestored) {
+    return (
+      <div className="min-h-screen bg-guardian-bg flex items-center justify-center text-guardian-muted text-sm">
+        Loading session…
+      </div>
+    );
+  }
 
   if (!user) {
     return <LoginPage />;
   }
 
   const handleNavigate = (view: string) => {
-    setCurrentView(view as any);
+    setCurrentView(view as AppView);
   };
 
   const handleViewCamera = (id: string) => {
@@ -35,6 +46,7 @@ function AppContent() {
     <MainLayout currentView={currentView} onNavigate={handleNavigate}>
       {currentView === 'dashboard' && <Dashboard onViewCamera={handleViewCamera} onAddCamera={() => setCurrentView('add-camera')} />}
       {currentView === 'settings' && <SettingsPage />}
+      {currentView === 'admin-users' && <AdminUsersPage onBack={handleBackToDashboard} />}
       {currentView === 'add-camera' && <AddCameraPage onBack={handleBackToDashboard} />}
       {currentView === 'camera-stream' && <CameraStreamPage onBack={handleBackToDashboard} />}
       {currentView === 'camera' && (

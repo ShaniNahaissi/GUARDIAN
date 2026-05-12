@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: guardian-postgres
+    environment:
+      POSTGRES_USER: guardian
+      POSTGRES_PASSWORD: guardian
+      POSTGRES_DB: guardian
+    volumes:
+      - guardian_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guardian -d guardian"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
   guardian-backend:
     build:
       context: .
@@ -6,6 +23,14 @@ services:
     container_name: guardian-backend
     ports:
       - "8000:8000"
+    environment:
+      GUARDIAN_DATABASE_URL: postgresql+asyncpg://guardian:guardian@postgres:5432/guardian
+      GUARDIAN_JWT_SECRET: ${GUARDIAN_JWT_SECRET:-change-me-in-production}
+      GUARDIAN_ADMIN_USERNAME: ${GUARDIAN_ADMIN_USERNAME:-Admin}
+      GUARDIAN_ADMIN_PASSWORD: ${GUARDIAN_ADMIN_PASSWORD:-admin}
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test:
@@ -26,10 +51,13 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_BACKEND_URL: /api
-    container_name: guardian-frontend
-    ports:
-      - "8080:80"
-    depends_on:
-      guardian-backend:
-        condition: service_healthy
-    restart: unless-stopped
+      container_name: guardian-frontend
+      ports:
+        - "8080:80"
+      depends_on:
+        guardian-backend:
+          condition: service_healthy
+      restart: unless-stopped
+
+volumes:
+  guardian_pg_data:
