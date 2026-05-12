@@ -14,4 +14,4 @@ jobs:
         run: |
           cd /home/cs507/GUARDIAN
           git pull origin main
-          sudo docker compose -f docker-compose.yml up --build -d
+          docker compose -f docker-compose.yml up --build -d
