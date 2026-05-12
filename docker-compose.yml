@@ -51,13 +51,14 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_BACKEND_URL: /api
-      container_name: guardian-frontend
-      ports:
-        - "8080:80"
-      depends_on:
-        guardian-backend:
-          condition: service_healthy
-      restart: unless-stopped
+    container_name: guardian-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      guardian-backend:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   guardian_pg_data:

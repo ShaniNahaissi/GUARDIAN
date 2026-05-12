@@ -50,9 +50,9 @@ function AppContent() {
       {currentView === 'add-camera' && <AddCameraPage onBack={handleBackToDashboard} />}
       {currentView === 'camera-stream' && <CameraStreamPage onBack={handleBackToDashboard} />}
       {currentView === 'camera' && (
-        <CameraView 
-          cameraId={activeCameraId || 'CAM-001'} 
-          onBack={handleBackToDashboard} 
+        <CameraView
+          cameraId={activeCameraId || 'CAM-001'}
+          onBack={handleBackToDashboard}
         />
       )}
     </MainLayout>

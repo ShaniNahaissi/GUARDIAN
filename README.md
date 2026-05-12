@@ -1,9 +1,8 @@
 # GUARDIAN
 
 For dev:
-    backend:
-        docker compose -f docker-compose.dev.yml up --build
-    frontend:
-        cd frontend\app
-        npm install
-        npm run dev -- --host (to deploy on local network - will show address in terminal)
+
+- **Backend** (PostgreSQL + API): from repo root, `docker compose -f docker-compose.dev.yml up --build`
+- **Frontend**: `cd frontend\app`, `npm install`, then `npm run dev -- --host` (serves on the LAN; the terminal shows the URL)
+
+Production stack (Postgres + backend + TLS nginx): `docker compose -f docker-compose.yml up --build`
