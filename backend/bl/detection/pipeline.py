@@ -61,6 +61,18 @@ def process_frame_pipeline(
                     "confidence": score,
                 }
             )
+            label = f"id{tid} {cname}:{score:.2f}"
+            cv2.rectangle(frame_bgr, (x1, y1), (x2, y2), (30, 30, 255), 2)
+            cv2.putText(
+                frame_bgr,
+                label,
+                (x1, max(y1 - 10, 0)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (30, 30, 255),
+                1,
+                cv2.LINE_AA,
+            )
 
     ok, encoded = cv2.imencode(".jpg", frame_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
     if not ok:

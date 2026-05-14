@@ -101,13 +101,13 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
       </div>
 
       {showAlert && (
-        <AlertBanner 
-          title="WEAPON DETECTED" 
-          description="Camera 03 - Main Entrance | 14:23:45" 
+        <AlertBanner
+          title="WEAPON DETECTED"
+          description="Camera 03 - Main Entrance | 14:23:45"
           onClose={() => {
             console.log('Sending close alert to backend...');
             setShowAlert(false);
-          }} 
+          }}
         />
       )}
 
@@ -149,6 +149,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
                 onError={() => showToast('Feed URL failed to load.', 'error')}
               />
             )}
+            <div className="absolute border-2 border-red-500 w-36 h-48 sm:w-48 sm:h-64 top-1/3 left-1/3 shadow-[0_0_15px_rgba(239,68,68,0.5)] pointer-events-none" />
           </div>
 
           <div className="p-3 sm:p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-800 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center z-10">
@@ -170,10 +171,10 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
         </div>
 
         <div className="h-full overflow-y-auto md:pr-2">
-          <ThreatPanel 
-            threatLevel="critical" 
-            confidenceScore={98.7} 
-            detectionAccuracy="High" 
+          <ThreatPanel
+            threatLevel="critical"
+            confidenceScore={98.7}
+            detectionAccuracy="High"
             info={{
               objectType: 'Handgun',
               firstDetected: '23:47:15',
