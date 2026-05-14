@@ -58,7 +58,7 @@ export const CameraFeedCard: React.FC<CameraFeedCardProps> = ({
           <p className="text-xs text-gray-500 mt-2">{id}</p>
         </div>
         
-        <div className="flex w-full sm:w-auto gap-2 flex-wrap">
+        <div className="flex w-full sm:w-auto gap-2">
           <Button variant="secondary" className="flex-1 sm:flex-none !px-3 !py-1.5 text-xs" onClick={() => onView(id)}>
             <Eye className="w-4 h-4" /> View
           </Button>
@@ -66,14 +66,14 @@ export const CameraFeedCard: React.FC<CameraFeedCardProps> = ({
             <Bell className="w-4 h-4" /> Alert
           </Button>
           {canWrite && (
-            <div className="flex w-full sm:w-auto gap-2">
-              <Button variant="secondary" className="flex-1 sm:flex-none !px-3 !py-1.5 text-xs" onClick={() => onEdit?.(id)} title="Edit Camera">
+            <>
+              <Button variant="secondary" className="flex-none !px-3 !py-1.5 text-xs" onClick={() => onEdit?.(id)} title="Edit Camera">
                 <Edit2 className="w-4 h-4" />
               </Button>
-              <Button variant="danger" className="flex-1 sm:flex-none !px-3 !py-1.5 text-xs" onClick={() => onDelete?.(id)} title="Delete Camera">
+              <Button variant="danger" className="flex-none !px-3 !py-1.5 text-xs" onClick={() => onDelete?.(id)} title="Delete Camera">
                 <Trash2 className="w-4 h-4" />
               </Button>
-            </div>
+            </>
           )}
         </div>
       </div>
