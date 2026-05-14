@@ -23,6 +23,58 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const expectJsonRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [imgDim, setImgDim] = useState({ naturalWidth: 0, naturalHeight: 0 });
+  const [clientDim, setClientDim] = useState({ width: 0, height: 0 });
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const target = e.target as HTMLImageElement;
+    setImgDim({
+      naturalWidth: target.naturalWidth,
+      naturalHeight: target.naturalHeight
+    });
+  };
+
+  useEffect(() => {
+    const observer = new ResizeObserver((entries) => {
+      if (entries[0]) {
+        setClientDim({
+          width: entries[0].contentRect.width,
+          height: entries[0].contentRect.height,
+        });
+      }
+    });
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  const getBboxStyle = (bbox: [number, number, number, number]): React.CSSProperties => {
+    const { naturalWidth, naturalHeight } = imgDim;
+    const { width, height } = clientDim;
+    if (!naturalWidth || !naturalHeight || !width || !height) return { display: 'none' };
+    
+    const scale = Math.max(width / naturalWidth, height / naturalHeight);
+    const scaledWidth = naturalWidth * scale;
+    const scaledHeight = naturalHeight * scale;
+    const xOffset = (width - scaledWidth) / 2;
+    const yOffset = (height - scaledHeight) / 2;
+    
+    const [x1, y1, x2, y2] = bbox;
+    const left = xOffset + x1 * scale;
+    const top = yOffset + y1 * scale;
+    const boxWidth = (x2 - x1) * scale;
+    const boxHeight = (y2 - y1) * scale;
+    
+    return {
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${boxWidth}px`,
+      height: `${boxHeight}px`,
+      position: 'absolute',
+    };
+  };
 
   useEffect(() => {
     const id = streamId.trim();
@@ -95,9 +147,27 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
         : '';
 
   return (
-    <div className={`relative w-full h-full min-h-[120px] bg-gray-900 ${className}`}>
+    <div ref={containerRef} className={`relative w-full h-full min-h-[120px] bg-gray-900 overflow-hidden ${className}`}>
       {imgSrc ? (
-        <img src={imgSrc} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <>
+          <img 
+            src={imgSrc} 
+            alt="" 
+            className="absolute inset-0 w-full h-full object-cover" 
+            onLoad={handleImageLoad}
+          />
+          {lastMeta?.tracks.map(track => (
+            <div 
+              key={track.track_id}
+              className="border-[3px] border-guardian-accent shadow-[0_0_10px_rgba(239,68,68,0.5)] pointer-events-none z-20 flex flex-col items-start"
+              style={{ ...getBboxStyle(track.bbox), borderColor: '#ef4444' }}
+            >
+              <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap mt-[-24px]">
+                {track.class_name} {Math.round(track.confidence * 100)}%
+              </span>
+            </div>
+          ))}
+        </>
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-guardian-muted text-xs px-3 text-center gap-1">
           {status === 'connecting' && <span>Connecting…</span>}

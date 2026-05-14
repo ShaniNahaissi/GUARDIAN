@@ -4,16 +4,19 @@ import { CameraFeedCard } from '../components/molecules/CameraFeedCard';
 import { Button } from '../components/atoms/Button';
 import { Filter, RefreshCcw, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { getCameras, getSystemStats } from '../services/dataService';
+import { getCameras, getSystemStats, deleteCamera } from '../services/dataService';
 import type { CameraInfo, SystemStats } from '../services/dataService';
+import { useToast } from '../context/ToastContext';
 
 interface DashboardProps {
   onViewCamera: (id: string) => void;
   onAddCamera: () => void;
+  onEditCamera?: (id: string) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera, onEditCamera }) => {
   const { canWriteCameras } = useAuth();
+  const { showToast } = useToast();
   const [cameras, setCameras] = useState<CameraInfo[]>([]);
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [filter, setFilter] = useState<string>('all');
@@ -35,6 +38,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera 
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleDeleteCamera = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this camera? This action cannot be undone.")) {
+      const success = await deleteCamera(id);
+      if (success) {
+        showToast("Camera deleted successfully.", "success");
+        loadData();
+      } else {
+        showToast("Failed to delete camera.", "error");
+      }
+    }
+  };
 
   // Derive unique statusText labels from loaded cameras
   const availableLabels = Array.from(new Set(cameras.map(c => c.statusText)));
@@ -98,7 +113,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera 
             statusText={camera.statusText}
             imageUrl={camera.imageUrl}
             time={camera.time}
+            canWrite={canWriteCameras}
             onView={onViewCamera}
+            onEdit={onEditCamera}
+            onDelete={handleDeleteCamera}
           />
         ))}
         {filteredCameras.length === 0 && (

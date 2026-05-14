@@ -2,7 +2,7 @@ import React from 'react';
 import { Card } from '../atoms/Card';
 import { Badge } from '../atoms/Badge';
 import { Button } from '../atoms/Button';
-import { Eye, Bell } from 'lucide-react';
+import { Eye, Bell, Edit2, Trash2 } from 'lucide-react';
 import { LiveStreamPreview } from './LiveStreamPreview';
 import { useToast } from '../../context/ToastContext';
 
@@ -14,10 +14,15 @@ interface CameraFeedCardProps {
   statusText: string;
   imageUrl: string;
   time: string;
+  canWrite?: boolean;
   onView: (id: string) => void;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
 }
 
-export const CameraFeedCard: React.FC<CameraFeedCardProps> = ({ id, name, location, status, statusText, imageUrl, time, onView }) => {
+export const CameraFeedCard: React.FC<CameraFeedCardProps> = ({ 
+  id, name, location, status, statusText, imageUrl, time, canWrite, onView, onEdit, onDelete 
+}) => {
   const { showToast } = useToast();
 
   const handleAlert = () => {
@@ -60,6 +65,16 @@ export const CameraFeedCard: React.FC<CameraFeedCardProps> = ({ id, name, locati
           <Button variant={status === 'normal' ? 'secondary' : 'danger'} className="flex-1 sm:flex-none !px-3 !py-1.5 text-xs" onClick={handleAlert}>
             <Bell className="w-4 h-4" /> Alert
           </Button>
+          {canWrite && (
+            <>
+              <Button variant="secondary" className="flex-none !px-3 !py-1.5 text-xs" onClick={() => onEdit?.(id)} title="Edit Camera">
+                <Edit2 className="w-4 h-4" />
+              </Button>
+              <Button variant="danger" className="flex-none !px-3 !py-1.5 text-xs" onClick={() => onDelete?.(id)} title="Delete Camera">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </Card>

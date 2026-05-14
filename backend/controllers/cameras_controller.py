@@ -5,7 +5,7 @@ from bl import camera_store
 from bl.rbac import CAMERAS_READ, CAMERAS_WRITE, STATS_READ
 from dependencies.security import require_permission
 from models.user import User
-from schemas.camera import CameraCreateRequest, CameraInfo, SystemStats
+from schemas.camera import CameraCreateRequest, CameraUpdateRequest, CameraInfo, SystemStats
 
 router = APIRouter(prefix="/api", tags=["cameras"])
 
@@ -21,6 +21,23 @@ async def add_camera(
     _user: User = Depends(require_permission(CAMERAS_WRITE)),
 ) -> JSONResponse:
     return camera_store.add_camera(payload)
+
+
+@router.put("/cameras/{camera_id}")
+async def edit_camera(
+    camera_id: str,
+    payload: CameraUpdateRequest,
+    _user: User = Depends(require_permission(CAMERAS_WRITE)),
+) -> JSONResponse:
+    return camera_store.update_camera(camera_id, payload)
+
+
+@router.delete("/cameras/{camera_id}")
+async def remove_camera(
+    camera_id: str,
+    _user: User = Depends(require_permission(CAMERAS_WRITE)),
+) -> JSONResponse:
+    return camera_store.delete_camera(camera_id)
 
 
 @router.get("/stats", response_model=SystemStats)

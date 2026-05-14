@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Keep model in image so container can run independently.
 COPY trained_model/guardian_backend_model.onnx /app/trained_model/guardian_backend_model.onnx
+COPY trained_model/names.txt /app/trained_model/names.txt
 
 WORKDIR /app/backend
 EXPOSE 8000
