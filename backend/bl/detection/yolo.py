@@ -76,13 +76,11 @@ class YoloOnnxDetector:
         class_ids: list[int] = []
 
         for row in preds:
-            objectness = float(row[4])
-            class_scores = row[5:]
+            class_scores = row[4:]
             if class_scores.size == 0:
                 continue
             cls_id = int(np.argmax(class_scores))
-            cls_conf = float(class_scores[cls_id])
-            score = objectness * cls_conf
+            score = float(class_scores[cls_id])
             if score < conf_threshold:
                 continue
 
