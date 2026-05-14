@@ -22,8 +22,9 @@ Guardian is a proof-of-concept **real-time monitoring** app: camera or edge stre
 
 - **`backend/main.py`** — Single service: models, routes, middleware (audit/latency), WebSocket producer/consumer, ONNX + ByteTrack.
 - **`frontend/app/src/services/dataService.ts`** — **Only** place for API/stream URL helpers (`getBackendUrl`, `getProducerWebSocketUrl`, `getConsumerWebSocketUrl`, `getConsumerSnapshotUrl`, add camera payload).
-- **`frontend/app/src/App.tsx`** — View state machine (`dashboard` | `camera` | `settings` | `add-camera` | `camera-stream`); no `react-router`.
+- **`frontend/app/src/App.tsx`** — View state machine (`dashboard` | `camera` | `settings` | `add-camera` | `edit-camera` | `camera-stream`); no `react-router`.
 - **`trained_model/guardian_backend_model.onnx`** — Expected model path (see backend startup).
+- **`trained_model/names.txt`** — Class names mapping file used to resolve detection IDs (Gun, Knife, etc).
 
 ## Invariants (do not break without updating docs)
 

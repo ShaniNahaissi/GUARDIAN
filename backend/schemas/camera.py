@@ -20,6 +20,12 @@ class CameraCreateRequest(BaseModel):
     stream_uuid: str | None = Field(default=None, alias="streamUuid")
 
 
+class CameraUpdateRequest(BaseModel):
+    name: str | None = None
+    location: str | None = None
+    imageUrl: str | None = None
+
+
 class SystemStats(BaseModel):
     activeCameras: int
     activeOnline: int

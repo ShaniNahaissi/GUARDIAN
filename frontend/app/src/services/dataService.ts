@@ -232,3 +232,55 @@ export const addCamera = async (cameraData: AddCameraPayload): Promise<boolean> 
   MOCK_CAMERAS.push(newCamera);
   return true;
 };
+
+export const updateCamera = async (id: string, payload: Partial<CameraInfo>): Promise<boolean> => {
+  if (isBackendEnabled()) {
+    try {
+      const res = await fetch(`${getBackendUrl()}/cameras/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...apiAuthHeaders(),
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Failed to update camera');
+      return true;
+    } catch (e) {
+      console.error('Backend update camera failed', e);
+      return false;
+    }
+  }
+
+  // Mock
+  const idx = MOCK_CAMERAS.findIndex((c) => c.id === id);
+  if (idx !== -1) {
+    MOCK_CAMERAS[idx] = { ...MOCK_CAMERAS[idx], ...payload };
+    return true;
+  }
+  return false;
+};
+
+export const deleteCamera = async (id: string): Promise<boolean> => {
+  if (isBackendEnabled()) {
+    try {
+      const res = await fetch(`${getBackendUrl()}/cameras/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: apiAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to delete camera');
+      return true;
+    } catch (e) {
+      console.error('Backend delete camera failed', e);
+      return false;
+    }
+  }
+
+  // Mock
+  const idx = MOCK_CAMERAS.findIndex((c) => c.id === id);
+  if (idx !== -1) {
+    MOCK_CAMERAS.splice(idx, 1);
+    return true;
+  }
+  return false;
+};

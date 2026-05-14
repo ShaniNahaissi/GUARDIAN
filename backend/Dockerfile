@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY trained_model/guardian_backend_model.onnx /app/trained_model/guardian_backend_model.onnx
+COPY trained_model/names.txt /app/trained_model/names.txt
 
 COPY backend/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN sed -i 's/\r$//' /app/docker-entrypoint.sh
