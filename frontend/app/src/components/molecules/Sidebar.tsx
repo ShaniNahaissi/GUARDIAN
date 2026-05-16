@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Shield, LayoutDashboard, Settings, LogOut, HelpCircle, Menu, X, Video, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useStreamingSession } from '../../context/StreamingSessionContext';
+import { buildAppUrlForHashView } from '../../nav/appHash';
 import { isBackendEnabled } from '../../services/apiBase';
 import { Tutorial } from './Tutorial';
 
@@ -11,11 +13,22 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => {
   const { user, logout, isAdmin } = useAuth();
+  const { streamingActive } = useStreamingSession();
   const showUserAdmin = isAdmin && isBackendEnabled();
   const [showTutorial, setShowTutorial] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleNavigate = (view: string) => {
+    const onStreamTab = currentView === 'camera-stream';
+    const staysOnStreamUi = view === 'camera-stream';
+    const deferToNewTab =
+      streamingActive && onStreamTab && !staysOnStreamUi && view !== currentView;
+
+    if (deferToNewTab) {
+      window.open(buildAppUrlForHashView(view), '_blank', 'noopener,noreferrer');
+      setIsMobileMenuOpen(false);
+      return;
+    }
     onNavigate(view);
     setIsMobileMenuOpen(false);
   };

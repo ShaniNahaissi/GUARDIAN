@@ -9,12 +9,38 @@ import { EditCameraPage } from './pages/EditCameraPage';
 import { CameraStreamPage } from './pages/CameraStreamPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { StreamingSessionProvider } from './context/StreamingSessionContext';
+import { parseHashView } from './nav/appHash';
 
-type AppView = 'dashboard' | 'camera' | 'settings' | 'add-camera' | 'edit-camera' | 'camera-stream' | 'admin-users';
+type AppView =
+  | 'dashboard'
+  | 'camera'
+  | 'settings'
+  | 'add-camera'
+  | 'edit-camera'
+  | 'camera-stream'
+  | 'admin-users';
+
+function initialViewFromHash(): AppView {
+  switch (parseHashView()) {
+    case 'dashboard':
+      return 'dashboard';
+    case 'settings':
+      return 'settings';
+    case 'admin-users':
+      return 'admin-users';
+    case 'camera-stream':
+      return 'camera-stream';
+    case 'add-camera':
+      return 'add-camera';
+    default:
+      return 'dashboard';
+  }
+}
 
 function AppContent() {
   const { user, sessionRestored } = useAuth();
-  const [currentView, setCurrentView] = useState<AppView>('dashboard');
+  const [currentView, setCurrentView] = useState<AppView>(() => initialViewFromHash());
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
 
   if (!sessionRestored) {
@@ -72,7 +98,9 @@ function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <AppContent />
+        <StreamingSessionProvider>
+          <AppContent />
+        </StreamingSessionProvider>
       </AuthProvider>
     </ToastProvider>
   );

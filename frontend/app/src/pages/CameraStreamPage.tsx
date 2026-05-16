@@ -3,6 +3,8 @@ import { ArrowLeft, Video, VideoOff, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '../components/atoms/Button';
 import { Card } from '../components/atoms/Card';
 import { useToast } from '../context/ToastContext';
+import { useStreamingSession } from '../context/StreamingSessionContext';
+import { buildAppUrlForHashView } from '../nav/appHash';
 import { getProducerWebSocketUrl } from '../services/dataService';
 
 interface CameraStreamPageProps {
@@ -56,6 +58,7 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
   const jpegIntervalRef = useRef<number | null>(null);
   const fileObjectUrlRef = useRef<string | null>(null);
   const { showToast } = useToast();
+  const { setStreamingActive } = useStreamingSession();
 
   const clearJpegInterval = () => {
     if (jpegIntervalRef.current !== null) {
@@ -98,6 +101,19 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
       stopStreaming();
     };
   }, []);
+
+  useEffect(() => {
+    setStreamingActive(isStreaming);
+    return () => setStreamingActive(false);
+  }, [isStreaming, setStreamingActive]);
+
+  const handleBack = () => {
+    if (isStreaming) {
+      window.open(buildAppUrlForHashView('dashboard'), '_blank', 'noopener,noreferrer');
+      return;
+    }
+    onBack();
+  };
 
   const startJpegPump = () => {
     clearJpegInterval();
@@ -249,7 +265,7 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3 sm:items-center sm:gap-4">
-        <button type="button" onClick={onBack} className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
+        <button type="button" onClick={handleBack} className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
           <ArrowLeft className="w-6 h-6" />
         </button>
         <div>
