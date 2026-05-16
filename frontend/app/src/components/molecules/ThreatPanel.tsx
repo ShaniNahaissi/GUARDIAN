@@ -17,9 +17,13 @@ interface ThreatPanelProps {
 }
 
 export const ThreatPanel: React.FC<ThreatPanelProps> = ({ threatLevel, confidenceScore, detectionAccuracy, info }) => {
+  const isElevated = threatLevel !== 'normal';
+  const barClass = isElevated ? 'bg-red-500' : 'bg-guardian-accent';
+  const cardBorder = isElevated ? 'border-red-500/30' : 'border-gray-700';
+
   return (
     <div className="flex flex-col gap-4">
-      <Card className="p-4 border-red-500/30">
+      <Card className={`p-4 ${cardBorder}`}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-bold">Threat Level</h3>
           <Badge status={threatLevel}>{threatLevel.toUpperCase()}</Badge>
@@ -32,7 +36,7 @@ export const ThreatPanel: React.FC<ThreatPanelProps> = ({ threatLevel, confidenc
               <span className="font-bold">{confidenceScore}%</span>
             </div>
             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div className="h-full bg-red-500" style={{ width: `${confidenceScore}%` }}></div>
+              <div className={`h-full ${barClass}`} style={{ width: `${confidenceScore}%` }}></div>
             </div>
           </div>
           
@@ -42,7 +46,7 @@ export const ThreatPanel: React.FC<ThreatPanelProps> = ({ threatLevel, confidenc
               <span className="font-bold">{detectionAccuracy}</span>
             </div>
             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div className="h-full bg-red-500" style={{ width: '85%' }}></div>
+              <div className={`h-full ${barClass}`} style={{ width: isElevated ? '85%' : '0%' }}></div>
             </div>
           </div>
         </div>

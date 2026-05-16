@@ -7,6 +7,8 @@ interface LiveStreamPreviewProps {
   /** When set, open consumer WebSocket against this origin (must match producer backend). */
   consumerBackendOrigin?: string;
   className?: string;
+  /** Fires whenever detection JSON arrives (or null after disconnect / teardown). */
+  onTracksMeta?: (payload: StreamTrackPayload | null) => void;
 }
 
 /**
@@ -16,6 +18,7 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
   streamId,
   consumerBackendOrigin,
   className = '',
+  onTracksMeta,
 }) => {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'connecting' | 'live' | 'error'>('idle');
@@ -138,6 +141,10 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
       setLastMeta(null);
     };
   }, [streamId, consumerBackendOrigin]);
+
+  useEffect(() => {
+    onTracksMeta?.(lastMeta);
+  }, [lastMeta, onTracksMeta]);
 
   const trackHint =
     lastMeta && lastMeta.tracks.length > 0

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StatCard } from '../components/molecules/StatCard';
 import { CameraFeedCard } from '../components/molecules/CameraFeedCard';
 import { Button } from '../components/atoms/Button';
 import { Filter, RefreshCcw, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { getCameras, getSystemStats, deleteCamera } from '../services/dataService';
+import { getCameras, getSystemStats, deleteCamera, fetchStreamMeta, isBackendEnabled } from '../services/dataService';
 import type { CameraInfo, SystemStats } from '../services/dataService';
 import { useToast } from '../context/ToastContext';
 
@@ -19,6 +19,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera,
   const { showToast } = useToast();
   const [cameras, setCameras] = useState<CameraInfo[]>([]);
   const [stats, setStats] = useState<SystemStats | null>(null);
+  const [liveThreatByStream, setLiveThreatByStream] = useState<Record<string, boolean | undefined>>({});
   const [filter, setFilter] = useState<string>('all');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
@@ -39,6 +40,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera,
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!isBackendEnabled() || cameras.length === 0) {
+      setLiveThreatByStream({});
+      return;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      const next: Record<string, boolean | undefined> = {};
+      await Promise.all(
+        cameras.map(async (c) => {
+          const meta = await fetchStreamMeta(c.id);
+          next[c.id] = meta === null ? undefined : meta.count > 0;
+        }),
+      );
+      if (!cancelled) setLiveThreatByStream(next);
+    };
+    void poll();
+    const timer = window.setInterval(poll, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [cameras]);
+
+  const displayCameras = useMemo(() => {
+    return cameras.map((c) => {
+      const t = liveThreatByStream[c.id];
+      if (t === undefined) return c;
+      if (t) return { ...c, status: 'critical' as const, statusText: 'WEAPON DETECTED' };
+      return { ...c, status: 'normal' as const, statusText: 'NORMAL' };
+    });
+  }, [cameras, liveThreatByStream]);
+
+  const displayStats = useMemo(() => {
+    if (!stats) return null;
+    if (!isBackendEnabled()) return stats;
+    const liveCritical = cameras.filter((c) => liveThreatByStream[c.id] === true).length;
+    return { ...stats, criticalAlerts: liveCritical };
+  }, [stats, cameras, liveThreatByStream]);
+
   const handleDeleteCamera = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this camera? This action cannot be undone.")) {
       const success = await deleteCamera(id);
@@ -52,17 +93,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera,
   };
 
   // Derive unique statusText labels from loaded cameras
-  const availableLabels = Array.from(new Set(cameras.map(c => c.statusText)));
+  const availableLabels = Array.from(new Set(displayCameras.map((c) => c.statusText)));
 
-  const filteredCameras = cameras.filter(c => filter === 'all' || c.statusText === filter);
+  const filteredCameras = displayCameras.filter((c) => filter === 'all' || c.statusText === filter);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard title="Active Cameras" value={stats?.activeCameras.toString() || '0'} subValue={`${stats?.activeOnline || 0} Online`} trend="+2" iconType="camera" statusLabel="All Online" statusBadge="normal" />
-        <StatCard title="Warning Alerts" value={stats?.warningAlerts.toString() || '0'} subValue="Priority" trend="-2 from yesterday" iconType="warning" statusLabel="Low Risk" statusBadge="warning" />
-        <StatCard title="Major Alerts" value={stats?.majorAlerts.toString() || '0'} subValue="Priority" trend="+1 from yesterday" iconType="major" statusLabel="Medium Risk" statusBadge="major" />
-        <StatCard title="Critical Alerts" value={stats?.criticalAlerts.toString() || '0'} subValue="Priority" trend="Requires action" iconType="critical" statusLabel="High Risk" statusBadge="critical" />
+        <StatCard title="Active Cameras" value={displayStats?.activeCameras.toString() || '0'} subValue={`${displayStats?.activeOnline || 0} Online`} trend="+2" iconType="camera" statusLabel="All Online" statusBadge="normal" />
+        <StatCard title="Warning Alerts" value={displayStats?.warningAlerts.toString() || '0'} subValue="Priority" trend="-2 from yesterday" iconType="warning" statusLabel="Low Risk" statusBadge="warning" />
+        <StatCard title="Major Alerts" value={displayStats?.majorAlerts.toString() || '0'} subValue="Priority" trend="+1 from yesterday" iconType="major" statusLabel="Medium Risk" statusBadge="major" />
+        <StatCard title="Critical Alerts" value={displayStats?.criticalAlerts.toString() || '0'} subValue="Priority" trend="Requires action" iconType="critical" statusLabel="High Risk" statusBadge="critical" />
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end">
