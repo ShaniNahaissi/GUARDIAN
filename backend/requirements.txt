@@ -9,3 +9,5 @@ sqlalchemy[asyncio]>=2.0
 asyncpg
 python-jose[cryptography]
 bcrypt>=4.0
+psutil
+
