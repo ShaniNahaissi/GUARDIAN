@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//tmp/**)",
+      "Bash(python -m pip install -q albumentations --no-deps)",
+      "Bash(python -m pip install -q albucore opencv-python-headless pydantic scipy scikit-image PyYAML typing-extensions)",
+      "Bash(ls \"C:\\\\Users\\\\shaha\\\\.claude\\\\plans\" 2>/dev/null)",
+      "Read(//c/Users/shaha/.claude/**)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\shaha\\\\.claude\\\\plans\")",
+      "Read(//c/Users/shaha/.claude/plans/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\shaha\\.claude"
+    ]
+  }
+}
