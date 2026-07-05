@@ -123,6 +123,17 @@ class YoloOnnxDetector:
         return detections
 
     def predict(self, frame_bgr: np.ndarray) -> list[Detection]:
+        import time
+        import logging
+        logger = logging.getLogger("guardian.metrics")
+        
         blob, scale, pad = self._preprocess(frame_bgr)
+        
+        t0 = time.perf_counter()
         output = self.session.run([self.output_name], {self.input_name: blob})[0]
+        self.last_inference_ms = (time.perf_counter() - t0) * 1000
+        
+        # ponytail: log raw model run time at debug level for fine-grained profiling
+        logger.debug("model.predict.raw_inference_ms %.2f", self.last_inference_ms)
+        
         return self._postprocess(output, frame_bgr.shape[:2], scale, pad)
