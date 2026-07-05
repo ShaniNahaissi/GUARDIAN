@@ -26,7 +26,10 @@ class YoloOnnxDetector:
 
         self.class_names = class_names or {}
         providers = select_onnx_providers()
-        self.session = ort.InferenceSession(str(model_path), providers=providers)
+        sess_options = ort.SessionOptions()
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        self.session = ort.InferenceSession(str(model_path), sess_options=sess_options, providers=providers)
         self._providers_used = self.session.get_providers()
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name

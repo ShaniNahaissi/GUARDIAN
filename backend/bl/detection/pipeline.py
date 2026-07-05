@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import threading
 from typing import Any
 
 import cv2
@@ -8,18 +10,64 @@ import supervision as sv
 
 from bl.detection.tracker import get_byte_tracker, next_frame_seq
 from bl.detection.yolo import Detection, YoloOnnxDetector
+from bl.detection.temporal_action import NumPyGRUClassifier, TemporalFeatureExtractor, ACTION_CLASSES
+
+logger = logging.getLogger("guardian.pipeline")
+
+# Instantiate global shared action classifier
+_action_classifier = NumPyGRUClassifier()
+_feature_extractors: dict[str, TemporalFeatureExtractor] = {}
+_extractor_lock = threading.Lock()
 
 
-def _safe_track_id(val: Any) -> int:
-    if val is None:
-        return -1
-    try:
-        f = float(val)
-        if np.isnan(f):
-            return -1
-        return int(f)
-    except (TypeError, ValueError):
-        return -1
+def get_feature_extractor(stream_id: str) -> TemporalFeatureExtractor:
+    with _extractor_lock:
+        if stream_id not in _feature_extractors:
+            _feature_extractors[stream_id] = TemporalFeatureExtractor()
+        return _feature_extractors[stream_id]
+
+
+def remove_feature_extractor(stream_id: str) -> None:
+    with _extractor_lock:
+        _feature_extractors.pop(stream_id, None)
+
+
+def _should_trigger_action_recognition(tracked_list: list[dict[str, Any]], frame_shape: tuple[int, int]) -> bool:
+    """Early-exit checker: only run GRU action classifier if weapons exist or multiple suspects are in close proximity."""
+    h, w = frame_shape
+    
+    # 1. Trigger if any weapon class is tracked (class_id 0: Gun, 1: Knife)
+    has_weapon = any(t["class_id"] in (0, 1) for t in tracked_list)
+    if has_weapon:
+        return True
+        
+    # 2. Trigger if multiple suspects (class_id 2) are in close proximity (<35% of frame width/height or overlapping)
+    suspect_tracks = [t for t in tracked_list if t["class_id"] == 2]
+    if len(suspect_tracks) >= 2:
+        for i in range(len(suspect_tracks)):
+            s1 = suspect_tracks[i]
+            x1_1, y1_1, x2_1, y2_1 = s1["bbox"]
+            cx1, cy1 = (x1_1 + x2_1) / 2, (y1_1 + y2_1) / 2
+            
+            for j in range(i + 1, len(suspect_tracks)):
+                s2 = suspect_tracks[j]
+                x1_2, y1_2, x2_2, y2_2 = s2["bbox"]
+                cx2, cy2 = (x1_2 + x2_2) / 2, (y1_2 + y2_2) / 2
+                
+                # Center-to-center distance normalized by frame dimensions
+                dist = (((cx1 - cx2) / w) ** 2 + ((cy1 - cy2) / h) ** 2) ** 0.5
+                if dist < 0.35:
+                    return True
+                    
+                # Bbox intersection check
+                ix1 = max(x1_1, x1_2)
+                iy1 = max(y1_1, y1_2)
+                ix2 = min(x2_1, x2_2)
+                iy2 = min(y2_1, y2_2)
+                if ix2 > ix1 and iy2 > iy1:
+                    return True
+                    
+    return False
 
 
 def process_frame_pipeline(
@@ -27,41 +75,74 @@ def process_frame_pipeline(
     frame_bgr: np.ndarray,
     det: YoloOnnxDetector,
 ) -> tuple[bytes, dict[str, Any], list[Detection]]:
-    """Runs ONNX inference, ByteTrack update, drawing, and JPEG encode (sync; call via asyncio.to_thread)."""
+    """Runs optimized ONNX inference, ByteTrack updates, temporal action classification, and broadcasts updates."""
     detections = det.predict(frame_bgr)
     tracker = get_byte_tracker(stream_id)
     h, w = frame_bgr.shape[:2]
 
+    # Convert detector outputs to supervision format and run tracking update
     if not detections:
-        tracked = tracker.update_with_detections(sv.Detections.empty())
+        tracked_list = tracker.update_with_detections(sv.Detections.empty())
     else:
         xyxy = np.array([[*d.xyxy] for d in detections], dtype=np.float32)
         conf = np.array([d.score for d in detections], dtype=np.float32)
         cls = np.array([d.class_id for d in detections], dtype=np.int32)
-        tracked = tracker.update_with_detections(sv.Detections(xyxy=xyxy, confidence=conf, class_id=cls))
+        tracked_list = tracker.update_with_detections(sv.Detections(xyxy=xyxy, confidence=conf, class_id=cls))
 
+    # Evaluate early-exit triggering logic
+    run_action_classifier = _should_trigger_action_recognition(tracked_list, (h, w))
+    
+    extractor = get_feature_extractor(stream_id)
+    # update histories (always done to maintain temporal trace consistency)
+    sequences = extractor.update_and_extract(tracked_list, (h, w))
+    
+    predicted_actions: dict[int, tuple[str, float]] = {}
+    if run_action_classifier:
+        # Run temporal inference over suspect sequences
+        for tid, seq in sequences.items():
+            action_idx, score = _action_classifier.predict(seq)
+            action_label = ACTION_CLASSES.get(action_idx, "Normal")
+            predicted_actions[tid] = (action_label, score)
+            
+            # Log threat detection updates if violent threat identified
+            if action_label != "Normal":
+                logger.warning(
+                    "threat_alert detected stream_id=%s track_id=%d action=%s confidence=%.2f%%",
+                    stream_id, tid, action_label, score * 100
+                )
+
+    # Format tracks payload output
     tracks_out: list[dict[str, Any]] = []
-    if tracked.xyxy is not None and len(tracked.xyxy) > 0:
-        tids = tracked.tracker_id
-        confs = tracked.confidence
-        classes = tracked.class_id
-        for i in range(len(tracked.xyxy)):
-            x1, y1, x2, y2 = map(int, tracked.xyxy[i].tolist())
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(w - 1, x2), min(h - 1, y2)
-            tid = _safe_track_id(tids[i]) if tids is not None else -1
-            score = float(confs[i]) if confs is not None else 0.0
-            cid = int(classes[i]) if classes is not None else 0
-            cname = det._label_for(cid)
-            tracks_out.append(
-                {
-                    "track_id": tid,
-                    "bbox": [x1, y1, x2, y2],
-                    "class_name": cname,
-                    "confidence": score,
-                }
-            )
+    for t in tracked_list:
+        tid = t["track_id"]
+        cid = t["class_id"]
+        score = t["confidence"]
+        x1, y1, x2, y2 = t["bbox"]
+        
+        # Ensure coordinates are within frame boundary
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w - 1, x2), min(h - 1, y2)
+        
+        # Get label from detector mapping
+        cname = det._label_for(cid)
+        
+        # Override class label & score for Suspects if active threat is classified
+        if cid == 2 and tid in predicted_actions:
+            action_label, action_score = predicted_actions[tid]
+            if action_label != "Normal":
+                cname = f"Suspect ({action_label})"
+                score = action_score
+                
+        tracks_out.append(
+            {
+                "track_id": tid,
+                "bbox": [x1, y1, x2, y2],
+                "class_name": cname,
+                "confidence": score,
+            }
+        )
 
+    # Encode processed frame to JPEG
     ok, encoded = cv2.imencode(".jpg", frame_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
     if not ok:
         raise RuntimeError("jpeg_encode_failed")

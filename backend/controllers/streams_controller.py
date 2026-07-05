@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from bl.detection import state as det_state
-from bl.detection.pipeline import process_frame_pipeline
+from bl.detection.pipeline import process_frame_pipeline, remove_feature_extractor
 from bl.detection.metrics import SystemMetricsTracker
 from bl.detection.streaming import connection_manager, store
 from bl.detection.tracker import remove_byte_tracker
@@ -94,6 +94,7 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
         raise
     finally:
         remove_byte_tracker(stream_id)
+        remove_feature_extractor(stream_id)
 
 
 @router.websocket("/consumer/{stream_id}")
