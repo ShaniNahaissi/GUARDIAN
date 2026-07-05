@@ -66,8 +66,9 @@ class TestPipelineUpgrades(unittest.TestCase):
         
         # Run track update
         tracks_f1 = smoother.update_with_detections(detections_f1)
-        # Validate FP filtering: since total_detections = 1 (< 3), it should not be returned yet
-        self.assertEqual(len(tracks_f1), 0)
+        # Bbox should appear immediately (length 1)
+        self.assertEqual(len(tracks_f1), 1)
+        self.assertEqual(tracks_f1[0]["bbox"], [100, 100, 200, 200])
         
         # Frame 2: Same suspect detected
         detections_f2 = sv.Detections(
@@ -76,7 +77,8 @@ class TestPipelineUpgrades(unittest.TestCase):
             class_id=np.array([2], dtype=np.int32)
         )
         tracks_f2 = smoother.update_with_detections(detections_f2)
-        self.assertEqual(len(tracks_f2), 0)  # total_detections = 2 (< 3)
+        self.assertEqual(len(tracks_f2), 1)
+        self.assertEqual(tracks_f2[0]["bbox"], [102, 98, 202, 201])
         
         # Frame 3: Same suspect detected
         detections_f3 = sv.Detections(
@@ -85,19 +87,19 @@ class TestPipelineUpgrades(unittest.TestCase):
             class_id=np.array([2], dtype=np.int32)
         )
         tracks_f3 = smoother.update_with_detections(detections_f3)
-        self.assertEqual(len(tracks_f3), 1)  # validated!
+        self.assertEqual(len(tracks_f3), 1)
         
         track = tracks_f3[0]
         self.assertIsNotNone(track["track_id"])
-        # Bbox should be smoothed (average of [100,100,200,200], [102,98,202,201], [101,102,199,198])
-        self.assertEqual(track["bbox"], [101, 100, 200, 199])
-        self.assertAlmostEqual(track["confidence"], 0.9, delta=0.01)
+        # Bbox should be the latest raw coordinates for responsiveness
+        self.assertEqual(track["bbox"], [101, 102, 199, 198])
+        self.assertAlmostEqual(track["confidence"], 0.88, delta=0.01)
         
         # Frame 4: Suspect missed (ghost tracking / survival)
         tracks_f4 = smoother.update_with_detections(sv.Detections.empty())
-        self.assertEqual(len(tracks_f4), 1)  # Kept alive!
+        self.assertEqual(len(tracks_f4), 1)  # Kept alive for 1 frame
         self.assertEqual(tracks_f4[0]["missed_frames"], 1)
-        self.assertTrue(tracks_f4[0]["confidence"] < 0.9)  # Confidence decayed
+        self.assertTrue(tracks_f4[0]["confidence"] < 0.88)  # Confidence decayed
 
     def test_temporal_feature_extractor(self):
         extractor = TemporalFeatureExtractor(window_size=30)

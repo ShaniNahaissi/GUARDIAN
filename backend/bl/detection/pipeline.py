@@ -100,16 +100,30 @@ def process_frame_pipeline(
     if run_action_classifier:
         # Run temporal inference over suspect sequences
         for tid, seq in sequences.items():
-            action_idx, score = _action_classifier.predict(seq)
-            action_label = ACTION_CLASSES.get(action_idx, "Normal")
-            predicted_actions[tid] = (action_label, score)
+            # 1. Displacement filter: compute displacement between start and end of sequence
+            c1_x = (seq[0][0] + seq[0][2]) / 2
+            c1_y = (seq[0][1] + seq[0][3]) / 2
+            c2_x = (seq[-1][0] + seq[-1][2]) / 2
+            c2_y = (seq[-1][1] + seq[-1][3]) / 2
+            displacement = ((c1_x - c2_x) ** 2 + (c1_y - c2_y) ** 2) ** 0.5
             
-            # Log threat detection updates if violent threat identified
-            if action_label != "Normal":
+            # Static check: displacement < 2% of frame size defaults to Normal
+            if displacement < 0.02:
+                action_label = "Normal"
+                score = 1.0
+            else:
+                action_idx, score = _action_classifier.predict(seq)
+                action_label = ACTION_CLASSES.get(action_idx, "Normal")
+            
+            # 2. Confidence filtering: Only override class name if threat confidence is high (>= 70%)
+            if action_label != "Normal" and score >= 0.70:
+                predicted_actions[tid] = (action_label, score)
                 logger.warning(
                     "threat_alert detected stream_id=%s track_id=%d action=%s confidence=%.2f%%",
                     stream_id, tid, action_label, score * 100
                 )
+            else:
+                predicted_actions[tid] = ("Normal", 1.0)
 
     # Format tracks payload output
     tracks_out: list[dict[str, Any]] = []

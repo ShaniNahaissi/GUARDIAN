@@ -9,7 +9,7 @@ import supervision as sv
 logger = logging.getLogger("guardian.tracker")
 
 class TrackState:
-    """Manages the state history of a single tracked object for temporal smoothing."""
+    """Manages the state history of a single tracked object for temporal features and responsiveness."""
     def __init__(self, track_id: int, class_id: int, bbox: list[int], score: float) -> None:
         self.track_id = track_id
         self.class_id = class_id
@@ -17,39 +17,34 @@ class TrackState:
         self.score_history: list[float] = [score]
         self.missed_frames = 0
         self.total_detections = 1
-        self.is_validated = False
+        self.latest_bbox = bbox
 
     def update(self, bbox: list[int], score: float) -> None:
+        self.latest_bbox = bbox
         self.bbox_history.append(bbox)
-        if len(self.bbox_history) > 5:
+        if len(self.bbox_history) > 35:  # Keep window history for action recognition
             self.bbox_history.pop(0)
         self.score_history.append(score)
-        if len(self.score_history) > 5:
+        if len(self.score_history) > 35:
             self.score_history.pop(0)
         self.missed_frames = 0
         self.total_detections += 1
-        # False Positive reduction: validate track if seen in at least 3 frames
-        if self.total_detections >= 3:
-            self.is_validated = True
 
-    def get_smoothed_bbox(self) -> list[int]:
-        """Averages the bounding box coordinates over the history window."""
-        arr = np.array(self.bbox_history)
-        mean_box = np.mean(arr, axis=0).astype(int).tolist()
-        return mean_box
+    def get_latest_bbox(self) -> list[int]:
+        """Returns the raw latest bounding box for maximum responsiveness and zero coordinate lag."""
+        return self.latest_bbox
 
-    def get_smoothed_score(self) -> float:
-        """Averages the confidence score over the history window."""
-        return float(np.mean(self.score_history))
+    def get_latest_score(self) -> float:
+        """Returns the latest confidence score."""
+        return self.score_history[-1] if self.score_history else 0.0
 
 
 class StreamTrackSmoother:
-    """Wraps ByteTrack and applies bounding box smoothing, flicker recovery, and track validation."""
+    """Wraps ByteTrack and applies responsive state management, instant detection display, and class smoothing."""
     def __init__(self, stream_id: str) -> None:
         self.stream_id = stream_id
         self.tracker = sv.ByteTrack()
         self.active_tracks: dict[int, TrackState] = {}
-        # Keep track of class names or configurations
         self.lock = threading.Lock()
 
     def update_with_detections(self, detections: sv.Detections) -> list[dict[str, Any]]:
@@ -84,30 +79,30 @@ class StreamTrackSmoother:
             for tid, state in self.active_tracks.items():
                 if tid not in seen_tids:
                     state.missed_frames += 1
-                    if state.missed_frames <= 3:  # Allow track to survive 3 frames without detection
-                        # Decay confidence score slightly per missed frame
-                        decayed_score = state.get_smoothed_score() * 0.8
+                    # Suspects (class 2) survive 1 frame, weapons (class 0, 1) survive 0 frames to prevent ghosting
+                    max_missed = 1 if state.class_id == 2 else 0
+                    if state.missed_frames <= max_missed:
+                        # Decay confidence score per missed frame
+                        decayed_score = state.get_latest_score() * 0.7
                         state.score_history.append(decayed_score)
-                        if len(state.score_history) > 5:
-                            state.score_history.pop(0)
                     else:
                         dead_tids.append(tid)
                         
             for tid in dead_tids:
                 self.active_tracks.pop(tid, None)
                 
-            # Compile outputs (only validated tracks to minimize transient false positives)
-            smoothed_tracks = []
+            # Compile outputs
+            tracks_out = []
             for tid, state in self.active_tracks.items():
-                if state.is_validated or state.total_detections >= 3:
-                    smoothed_tracks.append({
-                        "track_id": tid,
-                        "bbox": state.get_smoothed_bbox(),
-                        "class_id": state.class_id,
-                        "confidence": state.get_smoothed_score(),
-                        "missed_frames": state.missed_frames,
-                    })
-            return smoothed_tracks
+                # Detections appear immediately (total_detections >= 1) to eliminate latency in UI box display
+                tracks_out.append({
+                    "track_id": tid,
+                    "bbox": state.get_latest_bbox(),
+                    "class_id": state.class_id,
+                    "confidence": state.get_latest_score(),
+                    "missed_frames": state.missed_frames,
+                })
+            return tracks_out
 
 
 _tracker_lock = threading.Lock()
