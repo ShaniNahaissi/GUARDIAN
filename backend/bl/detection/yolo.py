@@ -27,6 +27,7 @@ class YoloOnnxDetector:
         self.class_names = class_names or {}
         providers = select_onnx_providers()
         sess_options = ort.SessionOptions()
+        sess_options.log_severity_level = 3  # Mute warnings/info logs (e.g. DRM device discovery warnings)
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
         self.session = ort.InferenceSession(str(model_path), sess_options=sess_options, providers=providers)
