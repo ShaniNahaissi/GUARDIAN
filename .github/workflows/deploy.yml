@@ -6,6 +6,7 @@ on:
       - main
       ## - dev
       ## TODO: Check best practice
+      
 
 jobs:
   deploy:
