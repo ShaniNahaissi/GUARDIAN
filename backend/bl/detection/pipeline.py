@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import Any
 
 import cv2
@@ -76,6 +77,9 @@ def process_frame_pipeline(
     det: YoloOnnxDetector,
 ) -> tuple[bytes, dict[str, Any], list[Detection]]:
     """Runs optimized ONNX inference, ByteTrack updates, temporal action classification, and broadcasts updates."""
+    t_start = time.perf_counter()
+    seq = next_frame_seq(stream_id)
+
     detections = det.predict(frame_bgr)
     tracker = get_byte_tracker(stream_id)
     h, w = frame_bgr.shape[:2]
@@ -94,17 +98,18 @@ def process_frame_pipeline(
     
     extractor = get_feature_extractor(stream_id)
     # update histories (always done to maintain temporal trace consistency)
-    sequences = extractor.update_and_extract(tracked_list, (h, w))
+    sequences = extractor.update_and_extract(tracked_list, (h, w), seq)
     
     predicted_actions: dict[int, tuple[str, float]] = {}
+    evaluated_sequences: list[dict[str, Any]] = []
     if run_action_classifier:
         # Run temporal inference over suspect sequences
-        for tid, seq in sequences.items():
+        for tid, seq_feat in sequences.items():
             # 1. Displacement filter: compute displacement between start and end of sequence
-            c1_x = (seq[0][0] + seq[0][2]) / 2
-            c1_y = (seq[0][1] + seq[0][3]) / 2
-            c2_x = (seq[-1][0] + seq[-1][2]) / 2
-            c2_y = (seq[-1][1] + seq[-1][3]) / 2
+            c1_x = (seq_feat[0][0] + seq_feat[0][2]) / 2
+            c1_y = (seq_feat[0][1] + seq_feat[0][3]) / 2
+            c2_x = (seq_feat[-1][0] + seq_feat[-1][2]) / 2
+            c2_y = (seq_feat[-1][1] + seq_feat[-1][3]) / 2
             displacement = ((c1_x - c2_x) ** 2 + (c1_y - c2_y) ** 2) ** 0.5
             
             # Static check: displacement < 2% of frame size defaults to Normal
@@ -112,7 +117,7 @@ def process_frame_pipeline(
                 action_label = "Normal"
                 score = 1.0
             else:
-                action_idx, score = _action_classifier.predict(seq)
+                action_idx, score = _action_classifier.predict(seq_feat)
                 action_label = ACTION_CLASSES.get(action_idx, "Normal")
             
             # 2. Confidence filtering: Only override class name if threat confidence is high (>= 70%)
@@ -124,6 +129,25 @@ def process_frame_pipeline(
                 )
             else:
                 predicted_actions[tid] = ("Normal", 1.0)
+
+            # Compile sequence analysis
+            track_hist = extractor.history.get(tid, [])
+            best_frame_seq = seq
+            best_frame_score = 0.0
+            if track_hist:
+                best_state = max(track_hist, key=lambda x: x["confidence"])
+                best_frame_seq = best_state["frame_seq"]
+                best_frame_score = best_state["confidence"]
+                
+            evaluated_sequences.append({
+                "track_id": tid,
+                "start_frame_seq": track_hist[0]["frame_seq"] if track_hist else seq,
+                "end_frame_seq": seq,
+                "action_label": action_label if (action_label != "Normal" and score >= 0.70) else "Normal",
+                "action_confidence": score if (action_label != "Normal" and score >= 0.70) else 1.0,
+                "best_frame_seq": best_frame_seq,
+                "best_frame_score": best_frame_score,
+            })
 
     # Format tracks payload output
     tracks_out: list[dict[str, Any]] = []
@@ -161,10 +185,14 @@ def process_frame_pipeline(
     if not ok:
         raise RuntimeError("jpeg_encode_failed")
 
-    seq = next_frame_seq(stream_id)
+    pipeline_latency = (time.perf_counter() - t_start) * 1000
+
     payload: dict[str, Any] = {
         "stream_id": stream_id,
         "frame_seq": seq,
         "tracks": tracks_out,
+        "yolo_latency_ms": getattr(det, "last_inference_ms", 0.0),
+        "pipeline_latency_ms": pipeline_latency,
+        "evaluated_sequences": evaluated_sequences,
     }
     return encoded.tobytes(), payload, detections

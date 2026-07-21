@@ -14,6 +14,7 @@ from bl.detection.pipeline import process_frame_pipeline, remove_feature_extract
 from bl.detection.metrics import SystemMetricsTracker
 from bl.detection.streaming import connection_manager, store
 from bl.detection.tracker import remove_byte_tracker
+from bl.metrics_service import save_metrics_to_db
 from bl.rbac import CAMERAS_READ
 from dependencies.security import require_permission
 from models.user import User
@@ -72,6 +73,21 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
 
             await store.update(stream_id, payload, jpeg_bytes, detections)
             await connection_manager.broadcast_frame(stream_id, jpeg_bytes, track_payload)
+
+            asyncio.create_task(
+                save_metrics_to_db(
+                    stream_id=stream_id,
+                    frame_seq=track_payload["frame_seq"],
+                    total_latency_ms=process_ms,
+                    yolo_latency_ms=track_payload.get("yolo_latency_ms", 0.0),
+                    detections_count=len(detections),
+                    track_count=len(track_payload["tracks"]),
+                    detections_json=track_payload["tracks"],
+                    cpu_utilization=metrics_tracker.get_cpu_utilization(),
+                    gpu_vram_used=metrics_tracker.get_gpu_vram()[0],
+                    evaluated_sequences=track_payload.get("evaluated_sequences", []),
+                )
+            )
 
             if frame_count % 30 == 0:
                 stats = metrics_tracker.get_all_metrics()

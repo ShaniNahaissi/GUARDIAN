@@ -26,7 +26,8 @@ class TemporalFeatureExtractor:
     def update_and_extract(
         self,
         active_tracks: list[dict[str, Any]],
-        frame_shape: tuple[int, int]
+        frame_shape: tuple[int, int],
+        frame_seq: int
     ) -> dict[int, np.ndarray]:
         """Updates track history, calculates velocities & proximity features, and returns feature sequences."""
         h, w = frame_shape
@@ -43,7 +44,8 @@ class TemporalFeatureExtractor:
             self.history.setdefault(tid, []).append({
                 "bbox": t["bbox"],
                 "class_id": t["class_id"],
-                "confidence": t["confidence"]
+                "confidence": t["confidence"],
+                "frame_seq": frame_seq
             })
             if len(self.history[tid]) > self.window_size:
                 self.history[tid].pop(0)

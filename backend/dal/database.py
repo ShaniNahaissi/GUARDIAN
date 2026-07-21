@@ -27,6 +27,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 async def init_db() -> None:
     from models.user import User  # noqa: F401 — register ORM metadata
+    from models.metrics import FrameMetric, SequenceMetric  # noqa: F401 — register ORM metadata
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

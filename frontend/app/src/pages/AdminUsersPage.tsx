@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Users, Plus, Pencil, Trash2, ArrowLeft } from 'lucide-react';
+import { Users, Plus, Pencil, Trash2, ArrowLeft, Settings, Activity } from 'lucide-react';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { useToast } from '../context/ToastContext';
@@ -11,6 +11,7 @@ import {
   type AdminUserRow,
 } from '../services/adminUsersApi';
 import type { AppRole } from '../services/authApi';
+import { AdminMetricsDashboard } from '../components/molecules/AdminMetricsDashboard';
 
 const ROLES: AppRole[] = ['admin', 'operator', 'viewer'];
 
@@ -31,6 +32,7 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
   const [editFullName, setEditFullName] = useState('');
   const [editRole, setEditRole] = useState<AppRole>('viewer');
   const [editPassword, setEditPassword] = useState('');
+  const [activeTab, setActiveTab] = useState<'metrics' | 'users'>('metrics');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,184 +141,218 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
           </button>
           <div>
             <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-              <Users className="w-7 h-7 text-guardian-accent shrink-0" />
-              Users
+              <Settings className="w-7 h-7 text-guardian-accent shrink-0" />
+              Admin Control Center
             </h2>
             <p className="text-guardian-muted text-sm mt-1">
-              Create accounts, assign roles, and remove users. You cannot remove the last administrator or yourself.
+              Configure system metrics logging, database persistent performance logs, and manage user accounts.
             </p>
           </div>
         </div>
-        <Button variant="secondary" type="button" onClick={() => void load()} disabled={loading}>
-          Refresh
-        </Button>
+        {activeTab === 'users' && (
+          <Button variant="secondary" type="button" onClick={() => void load()} disabled={loading}>
+            Refresh
+          </Button>
+        )}
       </div>
 
-      <Card className="p-4 sm:p-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Plus className="w-5 h-5 text-guardian-accent" />
-          Add user
-        </h3>
-        <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="block text-xs text-guardian-muted mb-1">Username</label>
-            <input
-              required
-              value={newUsername}
-              onChange={(e) => setNewUsername(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-guardian-muted mb-1">Password</label>
-            <input
-              required
-              type="password"
-              minLength={4}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-guardian-muted mb-1">Full name</label>
-            <input
-              value={newFullName}
-              onChange={(e) => setNewFullName(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
-              placeholder="Optional"
-            />
-          </div>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="block text-xs text-guardian-muted mb-1">Role</label>
-              <select
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value as AppRole)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button type="submit" className="shrink-0 self-end" disabled={saving}>
-              Add
-            </Button>
-          </div>
-        </form>
-      </Card>
+      {/* Sub-navigation Tabs */}
+      <div className="flex border-b border-gray-800 gap-6 text-sm">
+        <button
+          onClick={() => setActiveTab('metrics')}
+          className={`pb-3 font-semibold transition-colors flex items-center gap-2 border-b-2 ${
+            activeTab === 'metrics'
+              ? 'border-guardian-accent text-white'
+              : 'border-transparent text-guardian-muted hover:text-white'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          Metrics Dashboard
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`pb-3 font-semibold transition-colors flex items-center gap-2 border-b-2 ${
+            activeTab === 'users'
+              ? 'border-guardian-accent text-white'
+              : 'border-transparent text-guardian-muted hover:text-white'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          User Accounts
+        </button>
+      </div>
 
-      <Card className="p-0 overflow-hidden border border-gray-800">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 bg-gray-900/50 text-left text-guardian-muted">
-                <th className="px-4 py-3 font-medium">Username</th>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium hidden md:table-cell">Created</th>
-                <th className="px-4 py-3 font-medium w-32 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-guardian-muted">
-                    Loading…
-                  </td>
-                </tr>
-              )}
-              {!loading &&
-                rows.map((u) => (
-                  <tr key={u.id} className="border-b border-gray-800/80 hover:bg-gray-900/30">
-                    <td className="px-4 py-3 font-mono text-white">{u.username}</td>
-                    <td className="px-4 py-3">{u.fullName}</td>
-                    <td className="px-4 py-3 capitalize">{u.role}</td>
-                    <td className="px-4 py-3 text-guardian-muted hidden md:table-cell whitespace-nowrap">
-                      {formatCreated(u.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(u)}
-                        className="p-2 rounded-lg text-guardian-accent hover:bg-gray-800 inline-flex"
-                        aria-label={`Edit ${u.username}`}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(u)}
-                        className="p-2 rounded-lg text-guardian-danger hover:bg-red-500/10 inline-flex ml-1"
-                        aria-label={`Delete ${u.username}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
+      {activeTab === 'metrics' && <AdminMetricsDashboard />}
+
+      {activeTab === 'users' && (
+        <>
+          <Card className="p-4 sm:p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Plus className="w-5 h-5 text-guardian-accent" />
+              Add user
+            </h3>
+            <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div>
+                <label className="block text-xs text-guardian-muted mb-1">Username</label>
+                <input
+                  required
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-guardian-muted mb-1">Password</label>
+                <input
+                  required
+                  type="password"
+                  minLength={4}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-guardian-muted mb-1">Full name</label>
+                <input
+                  value={newFullName}
+                  onChange={(e) => setNewFullName(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs text-guardian-muted mb-1">Role</label>
+                  <select
+                    value={newRole}
+                    onChange={(e) => setNewRole(e.target.value as AppRole)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button type="submit" className="shrink-0 self-end" disabled={saving}>
+                  Add
+                </Button>
+              </div>
+            </form>
+          </Card>
+
+          <Card className="p-0 overflow-hidden border border-gray-800">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800 bg-gray-900/50 text-left text-guardian-muted">
+                    <th className="px-4 py-3 font-medium">Username</th>
+                    <th className="px-4 py-3 font-medium">Name</th>
+                    <th className="px-4 py-3 font-medium">Role</th>
+                    <th className="px-4 py-3 font-medium hidden md:table-cell">Created</th>
+                    <th className="px-4 py-3 font-medium w-32 text-right">Actions</th>
                   </tr>
-                ))}
-              {!loading && rows.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-guardian-muted">
-                    No users found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-guardian-muted">
+                        Loading…
+                      </td>
+                    </tr>
+                  )}
+                  {!loading &&
+                    rows.map((u) => (
+                      <tr key={u.id} className="border-b border-gray-800/80 hover:bg-gray-900/30">
+                        <td className="px-4 py-3 font-mono text-white">{u.username}</td>
+                        <td className="px-4 py-3">{u.fullName}</td>
+                        <td className="px-4 py-3 capitalize">{u.role}</td>
+                        <td className="px-4 py-3 text-guardian-muted hidden md:table-cell whitespace-nowrap">
+                          {formatCreated(u.createdAt)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(u)}
+                            className="p-2 rounded-lg text-guardian-accent hover:bg-gray-800 inline-flex"
+                            aria-label={`Edit ${u.username}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(u)}
+                            className="p-2 rounded-lg text-guardian-danger hover:bg-red-500/10 inline-flex ml-1"
+                            aria-label={`Delete ${u.username}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  {!loading && rows.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-guardian-muted">
+                        No users found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
 
-      {editing && (
-        <Card className="p-4 sm:p-6 border border-guardian-accent/30">
-          <h3 className="text-lg font-semibold mb-4">Edit {editing.username}</h3>
-          <form onSubmit={handleSaveEdit} className="space-y-4 max-w-md">
-            <div>
-              <label className="block text-xs text-guardian-muted mb-1">Full name</label>
-              <input
-                value={editFullName}
-                onChange={(e) => setEditFullName(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-guardian-muted mb-1">Role</label>
-              <select
-                value={editRole}
-                onChange={(e) => setEditRole(e.target.value as AppRole)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-guardian-muted mb-1">New password (optional)</label>
-              <input
-                type="password"
-                minLength={4}
-                value={editPassword}
-                onChange={(e) => setEditPassword(e.target.value)}
-                placeholder="Leave blank to keep current"
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
-              />
-            </div>
-            <div className="flex gap-3">
-              <Button type="submit" disabled={saving}>
-                Save
-              </Button>
-              <Button type="button" variant="secondary" onClick={closeEdit}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </Card>
+          {editing && (
+            <Card className="p-4 sm:p-6 border border-guardian-accent/30">
+              <h3 className="text-lg font-semibold mb-4">Edit {editing.username}</h3>
+              <form onSubmit={handleSaveEdit} className="space-y-4 max-w-md">
+                <div>
+                  <label className="block text-xs text-guardian-muted mb-1">Full name</label>
+                  <input
+                    value={editFullName}
+                    onChange={(e) => setEditFullName(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-guardian-muted mb-1">Role</label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as AppRole)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-guardian-muted mb-1">New password (optional)</label>
+                  <input
+                    type="password"
+                    minLength={4}
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    placeholder="Leave blank to keep current"
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <Button type="submit" disabled={saving}>
+                    Save
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={closeEdit}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          )}
+        </>
       )}
     </div>
   );

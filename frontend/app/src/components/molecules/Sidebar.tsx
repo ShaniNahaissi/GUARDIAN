@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, LayoutDashboard, Settings, LogOut, HelpCircle, Menu, X, Video, Users } from 'lucide-react';
+import { Shield, LayoutDashboard, Settings, LogOut, HelpCircle, Menu, X, Video, Users, Sliders } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useStreamingSession } from '../../context/StreamingSessionContext';
 import { buildAppUrlForHashView } from '../../nav/appHash';
@@ -73,8 +73,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => 
                   onClick={() => handleNavigate('admin-users')}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === 'admin-users' ? 'bg-gray-800/50 text-white' : 'text-guardian-muted hover:text-white hover:bg-gray-800/30'}`}
                 >
-                  <Users className="w-5 h-5" />
-                  <span className="font-medium">Users</span>
+                  <Sliders className="w-5 h-5" />
+                  <span className="font-medium">Admin Panel</span>
                 </button>
               </li>
             )}
