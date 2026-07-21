@@ -29,7 +29,7 @@ export const AdminMetricsDashboard: React.FC = () => {
   const [sequences, setSequences] = useState<SequenceMetricItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [refreshInterval, setRefreshInterval] = useState<number>(3000); // 3 seconds
+  const refreshInterval = 3000; // 3 seconds
   const [hoveredPoint, setHoveredPoint] = useState<FrameMetricPoint | null>(null);
 
   const loadData = useCallback(async () => {

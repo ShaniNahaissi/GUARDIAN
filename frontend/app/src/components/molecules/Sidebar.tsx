@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, LayoutDashboard, Settings, LogOut, HelpCircle, Menu, X, Video, Users, Sliders } from 'lucide-react';
+import { Shield, LayoutDashboard, Settings, LogOut, HelpCircle, Menu, X, Video, Sliders } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useStreamingSession } from '../../context/StreamingSessionContext';
 import { buildAppUrlForHashView } from '../../nav/appHash';
