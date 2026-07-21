@@ -266,6 +266,10 @@ export const AdminMetricsDashboard: React.FC = () => {
               <span className="text-guardian-muted">CPU Use:</span>
               <span className="text-white font-bold">{hoveredPoint.cpuUtilization}%</span>
             </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-guardian-muted">GPU VRAM:</span>
+              <span className="text-white font-bold">{hoveredPoint.gpuVramUsed} MB</span>
+            </div>
           </div>
         )}
       </div>
