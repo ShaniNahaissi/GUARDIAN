@@ -191,7 +191,7 @@ export const AdminMetricsDashboard: React.FC = () => {
           {/* Total Latency Area (underlying) */}
           <path
             d={`${dTotal} L ${paddingLeft + chartWidth},${height - paddingBottom} L ${paddingLeft},${height - paddingBottom} Z`}
-            className="fill-guardian-accent/5 stroke-none"
+            className="fill-orange-500/5 stroke-none"
           />
 
           {/* Lines */}
@@ -206,7 +206,7 @@ export const AdminMetricsDashboard: React.FC = () => {
           <path
             d={dTotal}
             fill="none"
-            className="stroke-guardian-accent"
+            className="stroke-orange-500"
             strokeWidth={1.5}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -228,7 +228,7 @@ export const AdminMetricsDashboard: React.FC = () => {
                   cx={x}
                   cy={yTotal}
                   r={hoveredPoint?.frameSeq === d.frameSeq ? 5 : 3}
-                  className={`transition-all ${hoveredPoint?.frameSeq === d.frameSeq ? 'fill-guardian-accent stroke-white' : 'fill-guardian-accent/0 stroke-none'}`}
+                  className={`transition-all ${hoveredPoint?.frameSeq === d.frameSeq ? 'fill-orange-500 stroke-white' : 'fill-orange-500/0 stroke-none'}`}
                   strokeWidth={1.5}
                 />
                 {/* Transparent wider hit zone */}
@@ -486,7 +486,7 @@ export const AdminMetricsDashboard: React.FC = () => {
             </h3>
             <div className="flex items-center gap-4 text-[10px] font-mono">
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-guardian-accent inline-block" />
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" />
                 <span className="text-guardian-muted">Total Pipeline</span>
               </div>
               <div className="flex items-center gap-1.5">
