@@ -35,6 +35,40 @@ export interface SequenceMetricItem {
   frameCount: number;
 }
 
+interface BackendMetricsSummary {
+  total_frames_processed: number;
+  avg_total_latency_ms: number;
+  avg_yolo_latency_ms: number;
+  total_sequences_analyzed: number;
+  threats_detected_count: number;
+}
+
+interface BackendFrameMetricPoint {
+  timestamp: string | null;
+  frame_seq: number;
+  total_latency_ms: number;
+  yolo_latency_ms: number;
+  track_count: number;
+  detections_count: number;
+  cpu_utilization: number;
+  gpu_vram_used: number;
+}
+
+interface BackendSequenceMetricItem {
+  timestamp: string | null;
+  stream_id: string;
+  track_id: number;
+  start_frame_seq: number;
+  end_frame_seq: number;
+  action_label: string;
+  action_confidence: number;
+  best_frame_seq: number;
+  best_frame_score: number;
+  avg_total_latency_ms: number;
+  avg_yolo_latency_ms: number;
+  frame_count: number;
+}
+
 const headersJson = (): HeadersInit => {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
   const t = getStoredAccessToken();
@@ -124,7 +158,7 @@ export async function fetchMetricsSummary(): Promise<MetricsSummary> {
   try {
     const res = await fetch(`${getBackendUrl()}/admin/metrics/summary`, { headers: headersJson() });
     if (!res.ok) throw new Error('Failed to fetch summary');
-    const data = await res.json();
+    const data = (await res.json()) as BackendMetricsSummary;
     return {
       totalFramesProcessed: data.total_frames_processed,
       avgTotalLatencyMs: data.avg_total_latency_ms,
@@ -143,8 +177,8 @@ export async function fetchFrameSeries(limit: number = 50): Promise<FrameMetricP
   try {
     const res = await fetch(`${getBackendUrl()}/admin/metrics/frame-series?limit=${limit}`, { headers: headersJson() });
     if (!res.ok) throw new Error('Failed to fetch frame series');
-    const data = await res.json();
-    return data.map((item: any) => ({
+    const data = (await res.json()) as BackendFrameMetricPoint[];
+    return data.map((item) => ({
       timestamp: item.timestamp,
       frameSeq: item.frame_seq,
       totalLatencyMs: item.total_latency_ms,
@@ -165,8 +199,8 @@ export async function fetchSequences(limit: number = 30): Promise<SequenceMetric
   try {
     const res = await fetch(`${getBackendUrl()}/admin/metrics/sequences?limit=${limit}`, { headers: headersJson() });
     if (!res.ok) throw new Error('Failed to fetch sequences');
-    const data = await res.json();
-    return data.map((item: any) => ({
+    const data = (await res.json()) as BackendSequenceMetricItem[];
+    return data.map((item) => ({
       timestamp: item.timestamp,
       streamId: item.stream_id,
       trackId: item.track_id,
