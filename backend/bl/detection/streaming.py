@@ -16,13 +16,29 @@ class StreamStore:
         self.processed_frames: dict[str, bytes] = {}
         self.detection_meta: dict[str, dict[str, Any]] = {}
 
-    async def update(self, stream_id: str, raw_frame: bytes, processed_frame: bytes, detections: list[Any]) -> None:
+    async def update(
+        self,
+        stream_id: str,
+        raw_frame: bytes,
+        processed_frame: bytes,
+        detections: list[Any],
+        tracks: list[dict[str, Any]] | None = None,
+    ) -> None:
         async with self._lock:
             self.raw_frames[stream_id] = raw_frame
             self.processed_frames[stream_id] = processed_frame
+            tracks = tracks or []
+            # weapon_count: an actual Gun/Knife box is tracked this frame.
+            # confirmed_threat: the temporal classifier has overridden a Suspect's label
+            # to "Suspect (Shooting)"/"Suspect (Violence)" (see pipeline.py's predicted_actions
+            # override) -- i.e. a real threat action, not just a person being tracked.
+            weapon_count = sum(1 for t in tracks if t.get("class_name") in ("Gun", "Knife"))
+            confirmed_threat = any(str(t.get("class_name", "")).startswith("Suspect (") for t in tracks)
             self.detection_meta[stream_id] = {
                 "count": len(detections),
                 "max_score": max((d.score for d in detections), default=0.0),
+                "weapon_count": weapon_count,
+                "confirmed_threat": confirmed_threat,
             }
 
     async def get_processed(self, stream_id: str) -> bytes | None:
@@ -31,7 +47,9 @@ class StreamStore:
 
     async def get_meta(self, stream_id: str) -> dict[str, Any]:
         async with self._lock:
-            return self.detection_meta.get(stream_id, {"count": 0, "max_score": 0.0})
+            return self.detection_meta.get(
+                stream_id, {"count": 0, "max_score": 0.0, "weapon_count": 0, "confirmed_threat": False}
+            )
 
 
 class ConnectionManager:

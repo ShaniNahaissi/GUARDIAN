@@ -72,7 +72,7 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
             process_ms = (time.perf_counter() - start) * 1000
             metrics_tracker.record_frame(process_ms)
 
-            await store.update(stream_id, payload, jpeg_bytes, detections)
+            await store.update(stream_id, payload, jpeg_bytes, detections, track_payload["tracks"])
             await connection_manager.broadcast_frame(stream_id, jpeg_bytes, track_payload)
 
             asyncio.create_task(

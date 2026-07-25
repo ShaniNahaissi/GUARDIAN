@@ -23,9 +23,17 @@ const isVideoElementSource = (url: string): boolean => {
   return false;
 };
 
-/** Model is weapon-only (e.g. Gun/Knife); any non-empty track list is an active detection. */
+const WEAPON_LABELS = new Set(['Gun', 'Knife']);
+
+/** True when a currently-tracked box is an actual weapon (Gun/Knife) -- not just any track,
+ * since person/Suspect boxes are tracked continuously once the person-detection model is active. */
 const hasWeaponTracks = (meta: StreamTrackPayload | null): boolean =>
-  !!meta && Array.isArray(meta.tracks) && meta.tracks.length > 0;
+  !!meta && Array.isArray(meta.tracks) && meta.tracks.some((t) => WEAPON_LABELS.has(t.class_name));
+
+/** True when the backend's temporal classifier has confirmed an active threat action:
+ * class_name is overridden to "Suspect (Shooting)"/"Suspect (Violence)" only once confidence >= 70%. */
+const hasConfirmedAction = (meta: StreamTrackPayload | null): boolean =>
+  !!meta && Array.isArray(meta.tracks) && meta.tracks.some((t) => t.class_name.startsWith('Suspect ('));
 
 function pickStrongestTrack(meta: StreamTrackPayload | null) {
   if (!meta?.tracks.length) return null;
@@ -80,23 +88,27 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
   const streamUrl = camera?.imageUrl?.trim() ?? '';
   const useLiveConsumer = !streamUrl.trim();
   const useVideo = useMemo(() => isVideoElementSource(streamUrl), [streamUrl]);
-  const weaponActive = useLiveConsumer && hasWeaponTracks(tracksMeta);
+  const weaponPresent = useLiveConsumer && hasWeaponTracks(tracksMeta);
+  const actionConfirmed = useLiveConsumer && hasConfirmedAction(tracksMeta);
+  // Full alert requires BOTH a weapon and the temporal classifier confirming an active threat --
+  // a weapon alone (or a person/Suspect alone) still displays, but doesn't raise the alert.
+  const threatActive = weaponPresent && actionConfirmed;
 
   useEffect(() => {
-    if (weaponActive) {
+    if (threatActive) {
       setLastThreatTime(new Date().toLocaleTimeString());
     }
-  }, [weaponActive, tracksMeta?.frame_seq]);
+  }, [threatActive, tracksMeta?.frame_seq]);
 
   useEffect(() => {
-    if (weaponActive && !prevWeaponRef.current) {
+    if (threatActive && !prevWeaponRef.current) {
       setShowAlert(true);
     }
-    if (!weaponActive && prevWeaponRef.current) {
+    if (!threatActive && prevWeaponRef.current) {
       setShowAlert(true);
     }
-    prevWeaponRef.current = weaponActive;
-  }, [weaponActive]);
+    prevWeaponRef.current = threatActive;
+  }, [threatActive]);
 
   useEffect(() => {
     if (!useVideo || !streamUrl || !videoRef.current) return;
@@ -109,7 +121,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
   const clockLabel = useMemo(() => new Date(nowTick).toLocaleTimeString(), [nowTick]);
 
   const threatPanelProps = useMemo(() => {
-    if (!weaponActive || !strongest) {
+    if (!threatActive || !strongest) {
       return {
         threatLevel: 'normal' as const,
         confidenceScore: 0,
@@ -135,7 +147,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
         distance: '—',
       },
     };
-  }, [weaponActive, strongest, lastThreatTime]);
+  }, [threatActive, strongest, lastThreatTime]);
 
   const handleRecord = () => {
     if (isRecording) {
@@ -182,9 +194,9 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
         </div>
       </div>
 
-      {weaponActive && showAlert && (
+      {threatActive && showAlert && (
         <AlertBanner
-          title="WEAPON DETECTED"
+          title="ACTIVE THREAT DETECTED"
           description={alertDescription}
           onClose={() => {
             setShowAlert(false);
@@ -198,15 +210,15 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
             <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
             <span className="font-bold drop-shadow-md text-sm sm:text-base">{camera?.name ?? cameraId}</span>
           </div>
-          {weaponActive && (
-            <>
-              <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
-                <Badge status="critical">THREAT DETECTED</Badge>
-              </div>
-              <div className="absolute top-14 left-3 sm:top-16 sm:left-4 z-10">
-                <Badge status="critical">WEAPON DETECTED</Badge>
-              </div>
-            </>
+          {threatActive && (
+            <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
+              <Badge status="critical">THREAT DETECTED</Badge>
+            </div>
+          )}
+          {weaponPresent && (
+            <div className="absolute top-14 left-3 sm:top-16 sm:left-4 z-10">
+              <Badge status={threatActive ? 'critical' : 'warning'}>WEAPON DETECTED</Badge>
+            </div>
           )}
 
           <div className="flex-1 relative flex items-center justify-center bg-gray-900">

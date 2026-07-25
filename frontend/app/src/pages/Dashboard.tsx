@@ -51,7 +51,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera,
       await Promise.all(
         cameras.map(async (c) => {
           const meta = await fetchStreamMeta(c.id);
-          next[c.id] = meta === null ? undefined : meta.count > 0;
+          // Require an actual weapon box AND a confirmed temporal threat action, not just any
+          // tracked box -- a lone Suspect/person track shouldn't flag the camera as critical.
+          next[c.id] = meta === null ? undefined : meta.weapon_count > 0 && meta.confirmed_threat;
         }),
       );
       if (!cancelled) setLiveThreatByStream(next);
@@ -68,7 +70,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewCamera, onAddCamera,
     return cameras.map((c) => {
       const t = liveThreatByStream[c.id];
       if (t === undefined) return c;
-      if (t) return { ...c, status: 'critical' as const, statusText: 'WEAPON DETECTED' };
+      if (t) return { ...c, status: 'critical' as const, statusText: 'ACTIVE THREAT' };
       return { ...c, status: 'normal' as const, statusText: 'NORMAL' };
     });
   }, [cameras, liveThreatByStream]);

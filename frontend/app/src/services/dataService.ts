@@ -142,14 +142,14 @@ export const normalizeConsumeBackendOrigin = (input: string): string => {
 /** Latest detection counts from backend stream store (poll when backend enabled). */
 export async function fetchStreamMeta(
   streamId: string,
-): Promise<{ count: number; max_score: number } | null> {
+): Promise<{ count: number; max_score: number; weapon_count: number; confirmed_threat: boolean } | null> {
   if (!isBackendEnabled()) return null;
   const id = encodeURIComponent(streamId.trim());
   if (!id) return null;
   try {
     const res = await fetch(`${getBackendUrl()}/streams/${id}/meta`, { headers: apiAuthHeaders() });
     if (!res.ok) return null;
-    return (await res.json()) as { count: number; max_score: number };
+    return (await res.json()) as { count: number; max_score: number; weapon_count: number; confirmed_threat: boolean };
   } catch {
     return null;
   }
