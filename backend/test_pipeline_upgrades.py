@@ -18,8 +18,9 @@ from bl.detection.augmentation import (
     VideoStyleAugmentor
 )
 from bl.detection.tracker import StreamTrackSmoother
-from bl.detection.temporal_action import TemporalFeatureExtractor, NumPyGRUClassifier
-from bl.detection.pipeline import _should_trigger_action_recognition
+from bl.detection.temporal_action import TemporalFeatureExtractor, NumPyCNNClassifier
+from bl.detection.pipeline import _should_trigger_action_recognition, _merge_detections
+from bl.detection.yolo import Detection
 
 
 class TestPipelineUpgrades(unittest.TestCase):
@@ -147,12 +148,35 @@ class TestPipelineUpgrades(unittest.TestCase):
         ]
         self.assertTrue(_should_trigger_action_recognition(tracked_4, (480, 640)))
 
-    def test_numpy_gru_classifier(self):
-        classifier = NumPyGRUClassifier(input_dim=12, hidden_dim=32, num_classes=4)
+    def test_merge_detections(self):
+        # Weapon model: a Gun (kept) and a stray Suspect detection (dropped, no longer trusted for people)
+        weapon_detections = [
+            Detection(xyxy=(10, 10, 20, 20), score=0.9, label="Gun", class_id=0),
+            Detection(xyxy=(30, 30, 40, 40), score=0.5, label="Suspect", class_id=2),
+        ]
+        # Person model (COCO ids): a person (kept, remapped to class_id 2) and a car (dropped)
+        person_detections = [
+            Detection(xyxy=(50, 50, 60, 60), score=0.8, label="person", class_id=0),
+            Detection(xyxy=(70, 70, 80, 80), score=0.7, label="car", class_id=2),
+        ]
+
+        merged = _merge_detections(weapon_detections, person_detections, suspect_label="Suspect")
+
+        self.assertEqual(len(merged), 2)
+        gun = next(d for d in merged if d.class_id == 0)
+        self.assertEqual(gun.xyxy, (10, 10, 20, 20))
+
+        person = next(d for d in merged if d.class_id == 2)
+        self.assertEqual(person.xyxy, (50, 50, 60, 60))
+        self.assertEqual(person.label, "Suspect")
+        self.assertAlmostEqual(person.score, 0.8)
+
+    def test_numpy_cnn_classifier(self):
+        classifier = NumPyCNNClassifier(input_dim=12, hidden_channels=32, num_classes=3)
         dummy_seq = np.random.normal(0, 0.1, (30, 12)).astype(np.float32)
-        
+
         idx, score = classifier.predict(dummy_seq)
-        self.assertTrue(0 <= idx < 4)
+        self.assertTrue(0 <= idx < 3)
         self.assertTrue(0.0 <= score <= 1.0)
 
 

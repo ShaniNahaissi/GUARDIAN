@@ -8,12 +8,13 @@ import numpy as np
 
 logger = logging.getLogger("guardian.temporal_action")
 
-# Classes recognized by the temporal model
+# Classes recognized by the temporal model. Stabbing was dropped from this taxonomy: the
+# real-data training source (UCF-Crime, see temporal_training/) has no matching category and
+# no other real data source is planned for it, so it would only ever ship untrained.
 ACTION_CLASSES = {
     0: "Normal",
     1: "Shooting",
-    2: "Stabbing",
-    3: "Violence"
+    2: "Violence"
 }
 
 class TemporalFeatureExtractor:
@@ -140,80 +141,79 @@ class TemporalFeatureExtractor:
         return sequences
 
 
-def sigmoid(x: np.ndarray) -> np.ndarray:
-    return 1.0 / (1.0 + np.exp(-np.clip(x, -50.0, 50.0)))
+KERNEL_SIZE = 5  # must match temporal_training/model.py's TemporalCNNClassifier
 
 
-class NumPyGRUClassifier:
-    """NumPy-based inference implementation of a lightweight GRU temporal action classifier."""
-    def __init__(self, input_dim: int = 12, hidden_dim: int = 32, num_classes: int = 4) -> None:
+def conv1d_same(x: np.ndarray, w: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Same-padding 1D convolution, stride 1. x: (in_ch, seq_len), w: (out_ch, in_ch, kernel),
+    b: (out_ch,) -> (out_ch, seq_len)."""
+    out_ch, in_ch, kernel = w.shape
+    pad = kernel // 2
+    seq_len = x.shape[1]
+    x_padded = np.pad(x, ((0, 0), (pad, pad)))
+    out = np.empty((out_ch, seq_len), dtype=np.float32)
+    for t in range(seq_len):
+        window = x_padded[:, t:t + kernel]  # (in_ch, kernel)
+        out[:, t] = np.tensordot(w, window, axes=([1, 2], [0, 1])) + b
+    return out
+
+
+def _relu(x: np.ndarray) -> np.ndarray:
+    return np.maximum(x, 0.0)
+
+
+class NumPyCNNClassifier:
+    """NumPy-based inference implementation of the 1D-CNN temporal action classifier: two
+    same-padded conv1d layers over the time axis, global-average-pooled, then a linear head.
+    Trained via temporal_training/temporal_training.ipynb (see that folder's
+    TemporalCNNClassifier/export_to_numpy_weights_cnn for the matching PyTorch training model
+    and exporter -- same conv1_w/conv1_b/conv2_w/conv2_b/fc_w/fc_b weight contract)."""
+    def __init__(self, input_dim: int = 12, hidden_channels: int = 32, num_classes: int = 3) -> None:
         self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
+        self.hidden_channels = hidden_channels
         self.num_classes = num_classes
-        
+
         # Load weights or initialize
         self.weights_loaded = False
         weights_path = Path(__file__).resolve().parents[3] / "trained_model" / "temporal_action_weights.npz"
-        
+
         if weights_path.exists():
             try:
                 data = np.load(weights_path)
-                self.w_ih = data["w_ih"]
-                self.w_hh = data["w_hh"]
-                self.b_ih = data["b_ih"]
-                self.b_hh = data["b_hh"]
-                self.w_fc = data["w_fc"]
-                self.b_fc = data["b_fc"]
+                self.conv1_w = data["conv1_w"]
+                self.conv1_b = data["conv1_b"]
+                self.conv2_w = data["conv2_w"]
+                self.conv2_b = data["conv2_b"]
+                self.fc_w = data["fc_w"]
+                self.fc_b = data["fc_b"]
                 self.weights_loaded = True
                 logger.info("Loaded temporal action weights from %s", weights_path)
             except Exception as e:
                 logger.error("Failed to load weights: %s. Re-initializing...", e)
-                
+
         if not self.weights_loaded:
             # Initialize weights deterministically to avoid pure random drift
             rng = np.random.default_rng(42)
-            self.w_ih = rng.normal(0, 0.1, (3 * hidden_dim, input_dim)).astype(np.float32)
-            self.w_hh = rng.normal(0, 0.1, (3 * hidden_dim, hidden_dim)).astype(np.float32)
-            self.b_ih = np.zeros(3 * hidden_dim, dtype=np.float32)
-            self.b_hh = np.zeros(3 * hidden_dim, dtype=np.float32)
-            
-            # Simple linear mapping to output classes
-            self.w_fc = rng.normal(0, 0.1, (num_classes, hidden_dim)).astype(np.float32)
-            self.b_fc = np.zeros(num_classes, dtype=np.float32)
+            self.conv1_w = rng.normal(0, 0.1, (hidden_channels, input_dim, KERNEL_SIZE)).astype(np.float32)
+            self.conv1_b = np.zeros(hidden_channels, dtype=np.float32)
+            self.conv2_w = rng.normal(0, 0.1, (hidden_channels, hidden_channels, KERNEL_SIZE)).astype(np.float32)
+            self.conv2_b = np.zeros(hidden_channels, dtype=np.float32)
+            self.fc_w = rng.normal(0, 0.1, (num_classes, hidden_channels)).astype(np.float32)
+            self.fc_b = np.zeros(num_classes, dtype=np.float32)
             logger.warning(
                 "Initialized temporal action classifier with default weights (Not Trained). "
-                "Run train_temporal_action.py to produce weights."
+                "Run temporal_training/temporal_training.ipynb to produce weights."
             )
 
     def forward(self, seq: np.ndarray) -> np.ndarray:
-        """Runs the sequence through the GRU cell and linear layer. seq shape: (seq_len, input_dim)"""
-        seq_len, feat_dim = seq.shape
-        h = np.zeros(self.hidden_dim, dtype=np.float32)
-        
-        for t in range(seq_len):
-            x = seq[t]
-            
-            # Pre-compute parts
-            gi = np.dot(self.w_ih, x) + self.b_ih
-            gh = np.dot(self.w_hh, h) + self.b_hh
-            
-            # Split into reset, update, and new gates
-            # PyTorch GRU layout: r, z, n (reset, update, new)
-            i_r, i_z, i_n = np.split(gi, 3)
-            h_r, h_z, h_n = np.split(gh, 3)
-            
-            r = sigmoid(i_r + h_r)
-            z = sigmoid(i_z + h_z)
-            n = np.tanh(i_n + r * h_n)
-            
-            h = (1.0 - z) * n + z * h
-            
-        # Fully connected output
-        logits = np.dot(self.w_fc, h) + self.b_fc
-        # Softmax to get class probabilities
-        exp_logits = np.exp(logits - np.max(logits)) # stable softmax
-        probs = exp_logits / np.sum(exp_logits)
-        return probs
+        """Runs the sequence through the conv stack and linear layer. seq shape: (seq_len, input_dim)"""
+        x = np.ascontiguousarray(seq.T, dtype=np.float32)  # (input_dim, seq_len)
+        x = _relu(conv1d_same(x, self.conv1_w, self.conv1_b))
+        x = _relu(conv1d_same(x, self.conv2_w, self.conv2_b))
+        pooled = x.mean(axis=1)  # (hidden_channels,)
+        logits = self.fc_w @ pooled + self.fc_b
+        exp_logits = np.exp(logits - np.max(logits))  # stable softmax
+        return exp_logits / np.sum(exp_logits)
 
     def predict(self, seq: np.ndarray) -> tuple[int, float]:
         """Returns the index of the predicted action and its confidence score."""

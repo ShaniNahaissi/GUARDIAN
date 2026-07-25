@@ -6,4 +6,5 @@ if TYPE_CHECKING:
     from bl.detection.yolo import YoloOnnxDetector
 
 detector: YoloOnnxDetector | None = None
+person_detector: YoloOnnxDetector | None = None
 CLASS_NAMES: dict[int, str] = {}

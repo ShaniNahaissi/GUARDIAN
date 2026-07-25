@@ -143,7 +143,7 @@ const getMockSequences = (): SequenceMetricItem[] => [
     trackId: 1,
     startFrameSeq: 140,
     endFrameSeq: 170,
-    actionLabel: 'Stabbing',
+    actionLabel: 'Shooting',
     actionConfidence: 0.8847,
     bestFrameSeq: 155,
     bestFrameScore: 0.8931,

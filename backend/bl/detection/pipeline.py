@@ -11,12 +11,12 @@ import supervision as sv
 
 from bl.detection.tracker import get_byte_tracker, next_frame_seq
 from bl.detection.yolo import Detection, YoloOnnxDetector
-from bl.detection.temporal_action import NumPyGRUClassifier, TemporalFeatureExtractor, ACTION_CLASSES
+from bl.detection.temporal_action import NumPyCNNClassifier, TemporalFeatureExtractor, ACTION_CLASSES
 
 logger = logging.getLogger("guardian.pipeline")
 
 # Instantiate global shared action classifier
-_action_classifier = NumPyGRUClassifier()
+_action_classifier = NumPyCNNClassifier()
 _feature_extractors: dict[str, TemporalFeatureExtractor] = {}
 _extractor_lock = threading.Lock()
 
@@ -34,7 +34,7 @@ def remove_feature_extractor(stream_id: str) -> None:
 
 
 def _should_trigger_action_recognition(tracked_list: list[dict[str, Any]], frame_shape: tuple[int, int]) -> bool:
-    """Early-exit checker: only run GRU action classifier if weapons exist or multiple suspects are in close proximity."""
+    """Early-exit checker: only run the CNN action classifier if weapons exist or multiple suspects are in close proximity."""
     h, w = frame_shape
     
     # 1. Trigger if any weapon class is tracked (class_id 0: Gun, 1: Knife)
@@ -71,16 +71,35 @@ def _should_trigger_action_recognition(tracked_list: list[dict[str, Any]], frame
     return False
 
 
+def _merge_detections(
+    weapon_detections: list[Detection],
+    person_detections: list[Detection],
+    suspect_label: str,
+) -> list[Detection]:
+    """Keeps only weapon classes (0: Gun, 1: Knife) from the custom model, and remaps
+    the pretrained person model's COCO `person` class (0) to Guardian's Suspect class (2)."""
+    weapons = [d for d in weapon_detections if d.class_id in (0, 1)]
+    people = [
+        Detection(xyxy=d.xyxy, score=d.score, label=suspect_label, class_id=2)
+        for d in person_detections
+        if d.class_id == 0
+    ]
+    return weapons + people
+
+
 def process_frame_pipeline(
     stream_id: str,
     frame_bgr: np.ndarray,
     det: YoloOnnxDetector,
+    person_det: YoloOnnxDetector | None = None,
 ) -> tuple[bytes, dict[str, Any], list[Detection]]:
     """Runs optimized ONNX inference, ByteTrack updates, temporal action classification, and broadcasts updates."""
     t_start = time.perf_counter()
     seq = next_frame_seq(stream_id)
 
-    detections = det.predict(frame_bgr)
+    weapon_detections = det.predict(frame_bgr)
+    person_detections = person_det.predict(frame_bgr) if person_det is not None else []
+    detections = _merge_detections(weapon_detections, person_detections, det._label_for(2))
     tracker = get_byte_tracker(stream_id)
     h, w = frame_bgr.shape[:2]
 
@@ -191,7 +210,7 @@ def process_frame_pipeline(
         "stream_id": stream_id,
         "frame_seq": seq,
         "tracks": tracks_out,
-        "yolo_latency_ms": getattr(det, "last_inference_ms", 0.0),
+        "yolo_latency_ms": getattr(det, "last_inference_ms", 0.0) + getattr(person_det, "last_inference_ms", 0.0),
         "pipeline_latency_ms": pipeline_latency,
         "evaluated_sequences": evaluated_sequences,
     }

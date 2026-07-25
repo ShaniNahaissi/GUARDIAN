@@ -1,6 +1,6 @@
 # GUARDIAN
 
-GUARDIAN is an intelligent real-time video analytics system designed for threat detection in CCTV streams. It leverages an optimized YOLOv8 model for static weapon detection, ByteTrack for persistent tracking, and a lightweight temporal GRU classifier to recognize active threat actions (Shooting, Stabbing, and Violence) over time.
+GUARDIAN is an intelligent real-time video analytics system designed for threat detection in CCTV streams. It leverages an optimized YOLOv8 model for static weapon detection, ByteTrack for persistent tracking, and a lightweight temporal 1D-CNN classifier to recognize active threat actions (Shooting and Violence) over time.
 
 ## Quickstart (Development)
 

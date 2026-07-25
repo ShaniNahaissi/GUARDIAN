@@ -7,8 +7,7 @@ import {
   RefreshCw, 
   ShieldAlert,
   Server,
-  Flame,
-  AlertTriangle
+  Flame
 } from 'lucide-react';
 import { Card } from '../atoms/Card';
 import { Button } from '../atoms/Button';
@@ -65,7 +64,6 @@ export const AdminMetricsDashboard: React.FC = () => {
   const threatCounts = {
     Normal: 0,
     Shooting: 0,
-    Stabbing: 0,
     Violence: 0,
   };
   sequences.forEach((s) => {
@@ -281,7 +279,6 @@ export const AdminMetricsDashboard: React.FC = () => {
     const data = [
       { name: 'Normal', count: threatCounts.Normal, color: 'fill-gray-600' },
       { name: 'Violence', count: threatCounts.Violence, color: 'fill-yellow-500' },
-      { name: 'Stabbing', count: threatCounts.Stabbing, color: 'fill-orange-500' },
       { name: 'Shooting', count: threatCounts.Shooting, color: 'fill-red-500' },
     ];
 
@@ -360,12 +357,6 @@ export const AdminMetricsDashboard: React.FC = () => {
         return (
           <span className="px-2 py-0.5 text-xs font-bold bg-red-950/60 border border-red-500/50 text-red-400 rounded-full flex items-center gap-1 w-fit">
             <Flame className="w-3.5 h-3.5" /> Shooting
-          </span>
-        );
-      case 'Stabbing':
-        return (
-          <span className="px-2 py-0.5 text-xs font-bold bg-orange-950/60 border border-orange-500/50 text-orange-400 rounded-full flex items-center gap-1 w-fit">
-            <AlertTriangle className="w-3.5 h-3.5" /> Stabbing
           </span>
         );
       case 'Violence':

@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Guardian temporal-training artifacts (generated; regenerate via temporal_training.ipynb)
+temporal_training/sequences/*/*.npy
+temporal_training/weights/
+temporal_training/figures/
+temporal_training/raw_ucf_crime/
