@@ -45,11 +45,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         det_state.person_detector = None
 
     logger.info(
-        "startup.ready model_loaded=%s person_model_loaded=%s ort_providers=%s",
+        "startup.ready model_loaded=%s person_model_loaded=%s weapon_ort_providers=%s person_ort_providers=%s",
         det_state.detector is not None,
         det_state.person_detector is not None,
         getattr(det_state.detector, "_providers_used", []),
+        getattr(det_state.person_detector, "_providers_used", []),
     )
+    if "CUDAExecutionProvider" not in getattr(det_state.detector, "_providers_used", []):
+        logger.warning("startup.gpu_check weapon detector is running on CPU -- inference will be much slower")
+    if det_state.person_detector is not None and "CUDAExecutionProvider" not in getattr(det_state.person_detector, "_providers_used", []):
+        logger.warning("startup.gpu_check person detector is running on CPU -- inference will be much slower")
     yield
     logger.info("shutdown.complete")
 

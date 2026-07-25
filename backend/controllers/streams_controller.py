@@ -81,6 +81,8 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
                     frame_seq=track_payload["frame_seq"],
                     total_latency_ms=process_ms,
                     yolo_latency_ms=track_payload.get("yolo_latency_ms", 0.0),
+                    person_latency_ms=track_payload.get("person_latency_ms", 0.0),
+                    action_latency_ms=track_payload.get("action_latency_ms", 0.0),
                     detections_count=len(detections),
                     track_count=len(track_payload["tracks"]),
                     detections_json=track_payload["tracks"],

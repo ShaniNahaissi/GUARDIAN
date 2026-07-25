@@ -1,31 +1,39 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  Activity, 
-  Cpu, 
-  Database, 
-  Timer, 
-  RefreshCw, 
+import {
+  Activity,
+  Cpu,
+  Database,
+  Timer,
+  RefreshCw,
   ShieldAlert,
   Server,
-  Flame
+  Flame,
+  Users,
+  Brain,
+  Zap,
+  AlertTriangle
 } from 'lucide-react';
 import { Card } from '../atoms/Card';
 import { Button } from '../atoms/Button';
-import { 
-  fetchMetricsSummary, 
-  fetchFrameSeries, 
-  fetchSequences 
+import {
+  fetchMetricsSummary,
+  fetchFrameSeries,
+  fetchSequences,
+  fetchModelStatus
 } from '../../services/adminMetricsApi';
-import type { 
-  MetricsSummary, 
-  FrameMetricPoint, 
-  SequenceMetricItem 
+import type {
+  MetricsSummary,
+  FrameMetricPoint,
+  SequenceMetricItem,
+  ModelStatus,
+  ModelRuntimeStatus
 } from '../../services/adminMetricsApi';
 
 export const AdminMetricsDashboard: React.FC = () => {
   const [summary, setSummary] = useState<MetricsSummary | null>(null);
   const [frameSeries, setFrameSeries] = useState<FrameMetricPoint[]>([]);
   const [sequences, setSequences] = useState<SequenceMetricItem[]>([]);
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const refreshInterval = 3000; // 3 seconds
@@ -33,14 +41,16 @@ export const AdminMetricsDashboard: React.FC = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const [sumData, seriesData, seqData] = await Promise.all([
+      const [sumData, seriesData, seqData, statusData] = await Promise.all([
         fetchMetricsSummary(),
         fetchFrameSeries(35),
         fetchSequences(15),
+        fetchModelStatus(),
       ]);
       setSummary(sumData);
       setFrameSeries(seriesData);
       setSequences(seqData);
+      setModelStatus(statusData);
     } catch (e) {
       console.error('Failed to reload dashboard metrics', e);
     } finally {
@@ -98,24 +108,32 @@ export const AdminMetricsDashboard: React.FC = () => {
     // Find max value to scale Y-axis (min 40ms for better scale)
     const maxVal = Math.max(
       40,
-      ...frameSeries.map((d) => Math.max(d.totalLatencyMs, d.yoloLatencyMs))
+      ...frameSeries.map((d) => Math.max(d.totalLatencyMs, d.yoloLatencyMs, d.personLatencyMs, d.actionLatencyMs))
     ) * 1.1;
 
     const pointsTotal: string[] = [];
     const pointsYolo: string[] = [];
+    const pointsPerson: string[] = [];
+    const pointsAction: string[] = [];
 
     frameSeries.forEach((d, i) => {
       const x = paddingLeft + (i / (frameSeries.length - 1)) * chartWidth;
-      
+
       const yTotal = height - paddingBottom - (d.totalLatencyMs / maxVal) * chartHeight;
       const yYolo = height - paddingBottom - (d.yoloLatencyMs / maxVal) * chartHeight;
+      const yPerson = height - paddingBottom - (d.personLatencyMs / maxVal) * chartHeight;
+      const yAction = height - paddingBottom - (d.actionLatencyMs / maxVal) * chartHeight;
 
       pointsTotal.push(`${x},${yTotal}`);
       pointsYolo.push(`${x},${yYolo}`);
+      pointsPerson.push(`${x},${yPerson}`);
+      pointsAction.push(`${x},${yAction}`);
     });
 
     const dTotal = `M ${pointsTotal.join(' L ')}`;
     const dYolo = `M ${pointsYolo.join(' L ')}`;
+    const dPerson = `M ${pointsPerson.join(' L ')}`;
+    const dAction = `M ${pointsAction.join(' L ')}`;
 
     return (
       <div className="relative">
@@ -202,6 +220,22 @@ export const AdminMetricsDashboard: React.FC = () => {
             strokeLinejoin="round"
           />
           <path
+            d={dPerson}
+            fill="none"
+            className="stroke-green-500"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d={dAction}
+            fill="none"
+            className="stroke-purple-500"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
             d={dTotal}
             fill="none"
             className="stroke-orange-500"
@@ -253,8 +287,16 @@ export const AdminMetricsDashboard: React.FC = () => {
               <span className="text-guardian-accent font-bold">{hoveredPoint.totalLatencyMs} ms</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-guardian-muted">YOLO Inference:</span>
+              <span className="text-guardian-muted">Weapon YOLO:</span>
               <span className="text-blue-400 font-bold">{hoveredPoint.yoloLatencyMs} ms</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-guardian-muted">Person Detector:</span>
+              <span className="text-green-400 font-bold">{hoveredPoint.personLatencyMs} ms</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-guardian-muted">Action CNN:</span>
+              <span className="text-purple-400 font-bold">{hoveredPoint.actionLatencyMs} ms</span>
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-guardian-muted">Track / Dets:</span>
@@ -335,6 +377,42 @@ export const AdminMetricsDashboard: React.FC = () => {
     );
   };
 
+  const renderModelStatusRow = (name: string, status: ModelRuntimeStatus | undefined) => {
+    if (!status || !status.loaded) {
+      return (
+        <div className="flex items-center justify-between gap-3 bg-gray-900/40 border border-gray-800 rounded-lg px-3 py-2.5">
+          <span className="text-xs font-semibold text-guardian-muted">{name}</span>
+          <span className="px-2 py-0.5 text-[10px] font-bold bg-red-950/60 border border-red-500/50 text-red-400 rounded-full flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" /> Not loaded
+          </span>
+        </div>
+      );
+    }
+
+    // Non-ONNX models (the NumPy action classifier) are intentionally CPU-only -- that's
+    // not a problem to flag, unlike an ONNX detector silently falling back off GPU.
+    const isCpuOnlyByDesign = status.backend === 'numpy';
+
+    return (
+      <div className="flex items-center justify-between gap-3 bg-gray-900/40 border border-gray-800 rounded-lg px-3 py-2.5">
+        <span className="text-xs font-semibold text-white">{name}</span>
+        {status.gpuActive ? (
+          <span className="px-2 py-0.5 text-[10px] font-bold bg-green-950/60 border border-green-500/50 text-green-400 rounded-full flex items-center gap-1">
+            <Zap className="w-3 h-3" /> GPU
+          </span>
+        ) : isCpuOnlyByDesign ? (
+          <span className="px-2 py-0.5 text-[10px] font-medium bg-gray-800/80 border border-gray-700/60 text-guardian-muted rounded-full">
+            CPU (by design)
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 text-[10px] font-bold bg-yellow-950/60 border border-yellow-500/50 text-yellow-400 rounded-full flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" /> CPU
+          </span>
+        )}
+      </div>
+    );
+  };
+
   const getLatencyColor = (ms: number) => {
     if (ms < 35) return 'text-guardian-success';
     if (ms < 70) return 'text-guardian-warning';
@@ -410,8 +488,21 @@ export const AdminMetricsDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Model runtime / GPU status */}
+      <Card className="p-4 sm:p-5">
+        <h3 className="font-bold text-sm text-white border-b border-gray-800 pb-3 mb-4 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-guardian-accent" />
+          Model Runtime Status
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {renderModelStatusRow('Weapon YOLO', modelStatus?.weaponDetector)}
+          {renderModelStatusRow('Person Detector', modelStatus?.personDetector)}
+          {renderModelStatusRow('Action CNN', modelStatus?.actionClassifier)}
+        </div>
+      </Card>
+
       {/* Summary KPI grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <Card className="p-4 sm:p-5 flex items-center gap-4 bg-gray-900/40">
           <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl shrink-0">
             <Database className="w-6 h-6" />
@@ -440,14 +531,44 @@ export const AdminMetricsDashboard: React.FC = () => {
         </Card>
 
         <Card className="p-4 sm:p-5 flex items-center gap-4 bg-gray-900/40">
-          <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl shrink-0">
+          <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl shrink-0">
             <Cpu className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs text-guardian-muted uppercase tracking-wider font-semibold">Avg YOLOv8</div>
+            <div className="text-xs text-guardian-muted uppercase tracking-wider font-semibold">Avg Weapon YOLO</div>
+            <div className="text-xl sm:text-2xl font-bold mt-1 font-mono flex items-baseline gap-1">
+              <span className="text-blue-400">
+                {summary ? summary.avgYoloLatencyMs.toFixed(1) : '—'}
+              </span>
+              <span className="text-[10px] text-guardian-muted font-normal">ms</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 sm:p-5 flex items-center gap-4 bg-gray-900/40">
+          <div className="p-3 bg-green-500/10 text-green-400 rounded-xl shrink-0">
+            <Users className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-xs text-guardian-muted uppercase tracking-wider font-semibold">Avg Person Detector</div>
+            <div className="text-xl sm:text-2xl font-bold mt-1 font-mono flex items-baseline gap-1">
+              <span className="text-green-400">
+                {summary ? summary.avgPersonLatencyMs.toFixed(1) : '—'}
+              </span>
+              <span className="text-[10px] text-guardian-muted font-normal">ms</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 sm:p-5 flex items-center gap-4 bg-gray-900/40">
+          <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl shrink-0">
+            <Brain className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-xs text-guardian-muted uppercase tracking-wider font-semibold">Avg Action CNN</div>
             <div className="text-xl sm:text-2xl font-bold mt-1 font-mono flex items-baseline gap-1">
               <span className="text-purple-400">
-                {summary ? summary.avgYoloLatencyMs.toFixed(1) : '—'}
+                {summary ? summary.avgActionLatencyMs.toFixed(1) : '—'}
               </span>
               <span className="text-[10px] text-guardian-muted font-normal">ms</span>
             </div>
@@ -475,14 +596,22 @@ export const AdminMetricsDashboard: React.FC = () => {
               <Activity className="w-4 h-4 text-guardian-accent" />
               Inference Latency Timeline (ms)
             </h3>
-            <div className="flex items-center gap-4 text-[10px] font-mono">
+            <div className="flex items-center gap-4 text-[10px] font-mono flex-wrap">
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" />
                 <span className="text-guardian-muted">Total Pipeline</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />
-                <span className="text-guardian-muted">YOLOv8 Run</span>
+                <span className="text-guardian-muted">Weapon YOLO</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />
+                <span className="text-guardian-muted">Person Detector</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block" />
+                <span className="text-guardian-muted">Action CNN</span>
               </div>
             </div>
           </div>

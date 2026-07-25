@@ -5,6 +5,8 @@ export interface MetricsSummary {
   totalFramesProcessed: number;
   avgTotalLatencyMs: number;
   avgYoloLatencyMs: number;
+  avgPersonLatencyMs: number;
+  avgActionLatencyMs: number;
   totalSequencesAnalyzed: number;
   threatsDetectedCount: number;
 }
@@ -14,6 +16,8 @@ export interface FrameMetricPoint {
   frameSeq: number;
   totalLatencyMs: number;
   yoloLatencyMs: number;
+  personLatencyMs: number;
+  actionLatencyMs: number;
   trackCount: number;
   detectionsCount: number;
   cpuUtilization: number;
@@ -32,6 +36,8 @@ export interface SequenceMetricItem {
   bestFrameScore: number;
   avgTotalLatencyMs: number;
   avgYoloLatencyMs: number;
+  avgPersonLatencyMs: number;
+  avgActionLatencyMs: number;
   frameCount: number;
 }
 
@@ -39,6 +45,8 @@ interface BackendMetricsSummary {
   total_frames_processed: number;
   avg_total_latency_ms: number;
   avg_yolo_latency_ms: number;
+  avg_person_latency_ms: number;
+  avg_action_latency_ms: number;
   total_sequences_analyzed: number;
   threats_detected_count: number;
 }
@@ -48,6 +56,8 @@ interface BackendFrameMetricPoint {
   frame_seq: number;
   total_latency_ms: number;
   yolo_latency_ms: number;
+  person_latency_ms: number;
+  action_latency_ms: number;
   track_count: number;
   detections_count: number;
   cpu_utilization: number;
@@ -66,7 +76,37 @@ interface BackendSequenceMetricItem {
   best_frame_score: number;
   avg_total_latency_ms: number;
   avg_yolo_latency_ms: number;
+  avg_person_latency_ms: number;
+  avg_action_latency_ms: number;
   frame_count: number;
+}
+
+export interface ModelRuntimeStatus {
+  loaded: boolean;
+  providers?: string[];
+  gpuActive: boolean;
+  backend?: string;
+  weightsLoaded?: boolean;
+}
+
+export interface ModelStatus {
+  weaponDetector: ModelRuntimeStatus;
+  personDetector: ModelRuntimeStatus;
+  actionClassifier: ModelRuntimeStatus;
+}
+
+interface BackendModelRuntimeStatus {
+  loaded: boolean;
+  providers?: string[];
+  gpu_active: boolean;
+  backend?: string;
+  weights_loaded?: boolean;
+}
+
+interface BackendModelStatus {
+  weapon_detector: BackendModelRuntimeStatus;
+  person_detector: BackendModelRuntimeStatus;
+  action_classifier: BackendModelRuntimeStatus;
 }
 
 const headersJson = (): HeadersInit => {
@@ -81,6 +121,8 @@ const getMockSummary = (): MetricsSummary => ({
   totalFramesProcessed: 14205,
   avgTotalLatencyMs: 38.45,
   avgYoloLatencyMs: 22.12,
+  avgPersonLatencyMs: 9.87,
+  avgActionLatencyMs: 1.35,
   totalSequencesAnalyzed: 412,
   threatsDetectedCount: 18,
 });
@@ -93,11 +135,15 @@ const getMockFrameSeries = (limit: number = 30): FrameMetricPoint[] => {
     const time = new Date(now.getTime() - i * 1000);
     const baseTotal = 35 + Math.sin(i / 3) * 5 + Math.random() * 8;
     const baseYolo = 20 + Math.sin(i / 3) * 2 + Math.random() * 4;
+    const basePerson = 9 + Math.sin(i / 3) * 1.5 + Math.random() * 3;
+    const baseAction = 1 + Math.random() * 1.5;
     points.push({
       timestamp: time.toISOString(),
       frameSeq: 1000 + (limit - i),
       totalLatencyMs: Math.round(baseTotal * 100) / 100,
       yoloLatencyMs: Math.round(baseYolo * 100) / 100,
+      personLatencyMs: Math.round(basePerson * 100) / 100,
+      actionLatencyMs: Math.round(baseAction * 100) / 100,
       trackCount: Math.random() > 0.5 ? 2 : 1,
       detectionsCount: Math.random() > 0.7 ? 2 : 1,
       cpuUtilization: Math.round((25 + Math.random() * 10) * 10) / 10,
@@ -121,6 +167,8 @@ const getMockSequences = (): SequenceMetricItem[] => [
     bestFrameScore: 0.9124,
     avgTotalLatencyMs: 37.82,
     avgYoloLatencyMs: 21.45,
+    avgPersonLatencyMs: 9.62,
+    avgActionLatencyMs: 1.28,
     frameCount: 30,
   },
   {
@@ -135,6 +183,8 @@ const getMockSequences = (): SequenceMetricItem[] => [
     bestFrameScore: 0.8415,
     avgTotalLatencyMs: 39.12,
     avgYoloLatencyMs: 22.04,
+    avgPersonLatencyMs: 10.05,
+    avgActionLatencyMs: 1.41,
     frameCount: 30,
   },
   {
@@ -149,9 +199,42 @@ const getMockSequences = (): SequenceMetricItem[] => [
     bestFrameScore: 0.8931,
     avgTotalLatencyMs: 36.54,
     avgYoloLatencyMs: 20.81,
+    avgPersonLatencyMs: 9.34,
+    avgActionLatencyMs: 1.19,
     frameCount: 30,
   },
 ];
+
+// Mock model-status data generator (assumes a dev machine without CUDA)
+const getMockModelStatus = (): ModelStatus => ({
+  weaponDetector: { loaded: true, providers: ['CUDAExecutionProvider', 'CPUExecutionProvider'], gpuActive: true },
+  personDetector: { loaded: true, providers: ['CUDAExecutionProvider', 'CPUExecutionProvider'], gpuActive: true },
+  actionClassifier: { loaded: true, backend: 'numpy', gpuActive: false, weightsLoaded: true },
+});
+
+export async function fetchModelStatus(): Promise<ModelStatus> {
+  if (!isBackendEnabled()) return Promise.resolve(getMockModelStatus());
+  try {
+    const res = await fetch(`${getBackendUrl()}/admin/metrics/model-status`, { headers: headersJson() });
+    if (!res.ok) throw new Error('Failed to fetch model status');
+    const data = (await res.json()) as BackendModelStatus;
+    const map = (m: BackendModelRuntimeStatus): ModelRuntimeStatus => ({
+      loaded: m.loaded,
+      providers: m.providers,
+      gpuActive: m.gpu_active,
+      backend: m.backend,
+      weightsLoaded: m.weights_loaded,
+    });
+    return {
+      weaponDetector: map(data.weapon_detector),
+      personDetector: map(data.person_detector),
+      actionClassifier: map(data.action_classifier),
+    };
+  } catch (e) {
+    console.error('Failed to fetch model status from backend, fallback to mock', e);
+    return getMockModelStatus();
+  }
+}
 
 export async function fetchMetricsSummary(): Promise<MetricsSummary> {
   if (!isBackendEnabled()) return Promise.resolve(getMockSummary());
@@ -163,6 +246,8 @@ export async function fetchMetricsSummary(): Promise<MetricsSummary> {
       totalFramesProcessed: data.total_frames_processed,
       avgTotalLatencyMs: data.avg_total_latency_ms,
       avgYoloLatencyMs: data.avg_yolo_latency_ms,
+      avgPersonLatencyMs: data.avg_person_latency_ms,
+      avgActionLatencyMs: data.avg_action_latency_ms,
       totalSequencesAnalyzed: data.total_sequences_analyzed,
       threatsDetectedCount: data.threats_detected_count,
     };
@@ -183,6 +268,8 @@ export async function fetchFrameSeries(limit: number = 50): Promise<FrameMetricP
       frameSeq: item.frame_seq,
       totalLatencyMs: item.total_latency_ms,
       yoloLatencyMs: item.yolo_latency_ms,
+      personLatencyMs: item.person_latency_ms,
+      actionLatencyMs: item.action_latency_ms,
       trackCount: item.track_count,
       detectionsCount: item.detections_count,
       cpuUtilization: item.cpu_utilization,
@@ -212,6 +299,8 @@ export async function fetchSequences(limit: number = 30): Promise<SequenceMetric
       bestFrameScore: item.best_frame_score,
       avgTotalLatencyMs: item.avg_total_latency_ms,
       avgYoloLatencyMs: item.avg_yolo_latency_ms,
+      avgPersonLatencyMs: item.avg_person_latency_ms,
+      avgActionLatencyMs: item.avg_action_latency_ms,
       frameCount: item.frame_count,
     }));
   } catch (e) {

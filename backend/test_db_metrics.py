@@ -14,16 +14,18 @@ class TestDBMetrics(unittest.IsolatedAsyncioTestCase):
         
         # Configure execute to return a synchronous MagicMock result object
         mock_result = MagicMock()
-        mock_result.fetchone.return_value = (15.0, 10.0)
+        mock_result.fetchone.return_value = (15.0, 10.0, 4.0, 2.0)
         mock_session.execute.return_value = mock_result
-        
+
         stream_id = "test-stream"
-        
+
         await save_metrics_to_db(
             stream_id=stream_id,
             frame_seq=2,
             total_latency_ms=20.0,
             yolo_latency_ms=12.0,
+            person_latency_ms=5.0,
+            action_latency_ms=3.0,
             detections_count=1,
             track_count=1,
             detections_json=[{"track_id": 1, "class_name": "Suspect", "confidence": 0.85}],
@@ -63,6 +65,8 @@ class TestDBMetrics(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seq_metric.action_confidence, 0.95)
         self.assertEqual(seq_metric.avg_total_latency_ms, 15.0)
         self.assertEqual(seq_metric.avg_yolo_latency_ms, 10.0)
+        self.assertEqual(seq_metric.avg_person_latency_ms, 4.0)
+        self.assertEqual(seq_metric.avg_action_latency_ms, 2.0)
         
         # Verify commit was called
         mock_session.commit.assert_called_once()

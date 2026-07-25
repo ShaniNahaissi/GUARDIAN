@@ -121,6 +121,7 @@ def process_frame_pipeline(
     
     predicted_actions: dict[int, tuple[str, float]] = {}
     evaluated_sequences: list[dict[str, Any]] = []
+    action_latency_ms = 0.0
     if run_action_classifier:
         # Run temporal inference over suspect sequences
         for tid, seq_feat in sequences.items():
@@ -130,13 +131,15 @@ def process_frame_pipeline(
             c2_x = (seq_feat[-1][0] + seq_feat[-1][2]) / 2
             c2_y = (seq_feat[-1][1] + seq_feat[-1][3]) / 2
             displacement = ((c1_x - c2_x) ** 2 + (c1_y - c2_y) ** 2) ** 0.5
-            
+
             # Static check: displacement < 2% of frame size defaults to Normal
             if displacement < 0.02:
                 action_label = "Normal"
                 score = 1.0
             else:
+                t_action = time.perf_counter()
                 action_idx, score = _action_classifier.predict(seq_feat)
+                action_latency_ms += (time.perf_counter() - t_action) * 1000
                 action_label = ACTION_CLASSES.get(action_idx, "Normal")
             
             # 2. Confidence filtering: Only override class name if threat confidence is high (>= 70%)
@@ -210,7 +213,11 @@ def process_frame_pipeline(
         "stream_id": stream_id,
         "frame_seq": seq,
         "tracks": tracks_out,
-        "yolo_latency_ms": getattr(det, "last_inference_ms", 0.0) + getattr(person_det, "last_inference_ms", 0.0),
+        # Per-model breakdown so the admin dashboard can plot each model's own cost, not just
+        # a combined "YOLO" figure -- yolo_latency_ms is the primary weapon detector alone.
+        "yolo_latency_ms": getattr(det, "last_inference_ms", 0.0),
+        "person_latency_ms": getattr(person_det, "last_inference_ms", 0.0) if person_det is not None else 0.0,
+        "action_latency_ms": action_latency_ms,
         "pipeline_latency_ms": pipeline_latency,
         "evaluated_sequences": evaluated_sequences,
     }
