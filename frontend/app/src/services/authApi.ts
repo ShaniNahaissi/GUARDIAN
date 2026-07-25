@@ -74,6 +74,8 @@ export async function fetchMe(token: string): Promise<AuthUser> {
   return res.json() as Promise<AuthUser>;
 }
 
-export function roleCanWriteCameras(role: string): boolean {
-  return role === 'admin' || role === 'operator';
+export function roleCanWriteCameras(_role: string): boolean {
+  // ponytail: every role now has full self-service camera permissions (backend/bl/rbac.py);
+  // only /api/admin/* (managing other users) stays admin-only.
+  return true;
 }
