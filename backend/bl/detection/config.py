@@ -10,5 +10,5 @@ INPUT_SIZE = 640
 
 # Matches ultralytics' own model.predict() defaults (conf=0.25, iou=0.7), so live detections
 # match what the training notebook's evaluate_threat()/report video showed on the same footage.
-WEAPON_CONF_THRESHOLD = float(os.environ.get("GUARDIAN_WEAPON_CONF_THRESHOLD", "0.05"))
+WEAPON_CONF_THRESHOLD = float(os.environ.get("GUARDIAN_WEAPON_CONF_THRESHOLD", "0.25"))
 WEAPON_IOU_THRESHOLD = float(os.environ.get("GUARDIAN_WEAPON_IOU_THRESHOLD", "0.7"))
