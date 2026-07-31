@@ -50,11 +50,10 @@ function bboxCenterLabel(bbox: [number, number, number, number]): string {
 export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
   const [camera, setCamera] = useState<CameraInfo | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [showAlert, setShowAlert] = useState(true);
   const [tracksMeta, setTracksMeta] = useState<StreamTrackPayload | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
-  const [lastThreatTime, setLastThreatTime] = useState<string | null>(null);
-  const prevWeaponRef = useRef(false);
+  const [lastThreatAt, setLastThreatAt] = useState<number | null>(null);
+  const wasThreatActiveRef = useRef(false);
   const feedRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const { showToast } = useToast();
@@ -95,19 +94,10 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
   const threatActive = weaponPresent && actionConfirmed;
 
   useEffect(() => {
-    if (threatActive) {
-      setLastThreatTime(new Date().toLocaleTimeString());
+    if (threatActive && !wasThreatActiveRef.current) {
+      setLastThreatAt(Date.now());
     }
-  }, [threatActive, tracksMeta?.frame_seq]);
-
-  useEffect(() => {
-    if (threatActive && !prevWeaponRef.current) {
-      setShowAlert(true);
-    }
-    if (!threatActive && prevWeaponRef.current) {
-      setShowAlert(true);
-    }
-    prevWeaponRef.current = threatActive;
+    wasThreatActiveRef.current = threatActive;
   }, [threatActive]);
 
   useEffect(() => {
@@ -119,6 +109,13 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
 
   const strongest = useMemo(() => pickStrongestTrack(tracksMeta), [tracksMeta]);
   const clockLabel = useMemo(() => new Date(nowTick).toLocaleTimeString(), [nowTick]);
+  const lastThreatTime = useMemo(
+    () => (lastThreatAt !== null ? new Date(lastThreatAt).toLocaleTimeString() : null),
+    [lastThreatAt],
+  );
+  const secondsSinceAlert = lastThreatAt !== null ? Math.max(0, Math.floor((nowTick - lastThreatAt) / 1000)) : null;
+  // Message stays up for 2s after each new detection, then the block switches to a running "Ns ago" counter.
+  const showAlertMessage = secondsSinceAlert !== null && secondsSinceAlert < 2;
 
   const threatPanelProps = useMemo(() => {
     if (!threatActive || !strongest) {
@@ -194,15 +191,17 @@ export const CameraView: React.FC<CameraViewProps> = ({ cameraId, onBack }) => {
         </div>
       </div>
 
-      {threatActive && showAlert && (
-        <AlertBanner
-          title="ACTIVE THREAT DETECTED"
-          description={alertDescription}
-          onClose={() => {
-            setShowAlert(false);
-          }}
-        />
-      )}
+      <AlertBanner
+        title={showAlertMessage ? 'ACTIVE THREAT DETECTED' : 'Camera Status'}
+        description={
+          showAlertMessage
+            ? alertDescription
+            : secondsSinceAlert !== null
+              ? `Last threat detected ${secondsSinceAlert}s ago (${lastThreatTime})`
+              : 'No threats detected on this camera'
+        }
+        variant={showAlertMessage ? 'alert' : 'idle'}
+      />
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
         <div ref={feedRef} className="lg:col-span-2 flex flex-col h-full min-h-[350px] bg-black rounded-xl border border-gray-800 overflow-hidden relative">
