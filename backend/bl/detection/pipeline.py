@@ -12,6 +12,11 @@ import supervision as sv
 from bl.detection.tracker import get_byte_tracker, next_frame_seq
 from bl.detection.yolo import Detection, YoloOnnxDetector
 from bl.detection.temporal_action import NumPyCNNClassifier, TemporalFeatureExtractor, ACTION_CLASSES
+from bl.detection.metrics import compute_iou
+
+# Minimum box overlap to consider a raw weapon detection the same object as a ByteTrack-confirmed
+# weapon track this frame, so its real persistent track_id can be reused instead of a placeholder.
+_WEAPON_TRACK_MATCH_IOU = 0.3
 
 logger = logging.getLogger("guardian.pipeline")
 
@@ -180,22 +185,28 @@ def process_frame_pipeline(
         tid = t["track_id"]
         cid = t["class_id"]
         score = t["confidence"]
+
+        # Weapons are handled in the block below, straight from this frame's raw detections --
+        # skip them here so a ByteTrack-confirmed weapon doesn't get added twice.
+        if cid in (0, 1):
+            continue
+
         x1, y1, x2, y2 = t["bbox"]
-        
+
         # Ensure coordinates are within frame boundary
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w - 1, x2), min(h - 1, y2)
-        
+
         # Get label from detector mapping
         cname = det._label_for(cid)
-        
+
         # Override class label & score for Suspects if active threat is classified
         if cid == 2 and tid in predicted_actions:
             action_label, action_score = predicted_actions[tid]
             if action_label != "Normal":
                 cname = f"Suspect ({action_label})"
                 score = action_score
-                
+
         tracks_out.append(
             {
                 "track_id": tid,
@@ -209,13 +220,34 @@ def process_frame_pipeline(
     # ByteTrack can take several frames to confirm a new track (or drop it entirely if the box jitters),
     # which would otherwise hide a weapon that's genuinely visible right now. Suspects still go through
     # the tracker above since action recognition needs their persistent track_id across frames.
-    for i, d in enumerate(d for d in detections if d.class_id in (0, 1)):
+    #
+    # Still reuse ByteTrack's own id when it has a confirmed weapon track overlapping this box, so the
+    # displayed id is a real persistent identity whenever the tracker has one -- falling back to a
+    # per-frame placeholder (negative, not persistent) only for weapons ByteTrack hasn't confirmed yet.
+    tracked_weapons = [t for t in tracked_list if t["class_id"] in (0, 1)]
+    next_placeholder_id = -1
+    for d in detections:
+        if d.class_id not in (0, 1):
+            continue
+
+        matched_tid: int | None = None
+        best_iou = _WEAPON_TRACK_MATCH_IOU
+        for t in tracked_weapons:
+            iou = compute_iou(tuple(d.xyxy), tuple(t["bbox"]))
+            if iou >= best_iou:
+                best_iou = iou
+                matched_tid = t["track_id"]
+
+        if matched_tid is None:
+            matched_tid = next_placeholder_id
+            next_placeholder_id -= 1
+
         x1, y1, x2, y2 = d.xyxy
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w - 1, x2), min(h - 1, y2)
         tracks_out.append(
             {
-                "track_id": -(i + 1),
+                "track_id": matched_tid,
                 "bbox": [x1, y1, x2, y2],
                 "class_name": det._label_for(d.class_id),
                 "confidence": d.score,

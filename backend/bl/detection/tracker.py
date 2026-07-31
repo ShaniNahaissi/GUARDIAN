@@ -48,7 +48,13 @@ class StreamTrackSmoother:
         # ByteTrack has its own activation confidence floor (default 0.25) independent of the
         # detector's own threshold -- without this, boxes let through by WEAPON_CONF_THRESHOLD
         # still never get tracked/displayed if they fall below ByteTrack's own default.
-        self.tracker = sv.ByteTrack(track_activation_threshold=WEAPON_CONF_THRESHOLD)
+        # minimum_matching_threshold also lowered from its 0.8 default: that's the IoU required
+        # between frames to keep the same track id, which is too strict for small/fast-moving
+        # objects like a gun and was causing frequent id churn/loss.
+        self.tracker = sv.ByteTrack(
+            track_activation_threshold=WEAPON_CONF_THRESHOLD,
+            minimum_matching_threshold=0.3,
+        )
         self.active_tracks: dict[int, TrackState] = {}
         self.lock = threading.Lock()
 
