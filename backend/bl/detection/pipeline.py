@@ -79,32 +79,14 @@ def _should_trigger_action_recognition(detections: list[Detection], frame_shape:
     return False
 
 
-def _dedup_weapon_boxes(weapons: list[Detection]) -> list[Detection]:
-    """Two independently-trained weapon models can both fire on the same physical object;
-    collapse overlapping boxes via NMS so it isn't drawn/tracked twice, keeping the
-    higher-confidence box of each cluster."""
-    if len(weapons) <= 1:
-        return weapons
-    boxes = [[d.xyxy[0], d.xyxy[1], d.xyxy[2] - d.xyxy[0], d.xyxy[3] - d.xyxy[1]] for d in weapons]
-    scores = [d.score for d in weapons]
-    idxs = cv2.dnn.NMSBoxes(boxes, scores, score_threshold=0.0, nms_threshold=0.45)
-    if idxs is None or (hasattr(idxs, "__len__") and len(idxs) == 0):
-        return []
-    return [weapons[int(i)] for i in np.asarray(idxs).flatten()]
-
-
 def _merge_detections(
     weapon_detections: list[Detection],
     person_detections: list[Detection],
     suspect_label: str,
-    secondary_weapon_detections: list[Detection] | None = None,
 ) -> list[Detection]:
-    """Keeps only weapon classes (0: Gun, 1: Knife) from the custom model (plus an optional second
-    weapon model, unioned and deduped -- see _dedup_weapon_boxes), and remaps the pretrained person
-    model's COCO `person` class (0) to Guardian's Suspect class (2)."""
+    """Keeps only weapon classes (0: Gun, 1: Knife) from the custom model, and remaps
+    the pretrained person model's COCO `person` class (0) to Guardian's Suspect class (2)."""
     weapons = [d for d in weapon_detections if d.class_id in (0, 1)]
-    weapons += [d for d in (secondary_weapon_detections or []) if d.class_id in (0, 1)]
-    weapons = _dedup_weapon_boxes(weapons)
     people = [
         Detection(xyxy=d.xyxy, score=d.score, label=suspect_label, class_id=2)
         for d in person_detections
@@ -118,7 +100,6 @@ def process_frame_pipeline(
     frame_bgr: np.ndarray,
     det: YoloOnnxDetector,
     person_det: YoloOnnxDetector | None = None,
-    secondary_weapon_det: YoloOnnxDetector | None = None,
 ) -> tuple[bytes, dict[str, Any], list[Detection]]:
     """Runs optimized ONNX inference, ByteTrack updates, temporal action classification, and broadcasts updates."""
     t_start = time.perf_counter()
@@ -126,10 +107,7 @@ def process_frame_pipeline(
 
     weapon_detections = det.predict(frame_bgr)
     person_detections = person_det.predict(frame_bgr) if person_det is not None else []
-    secondary_weapon_detections = secondary_weapon_det.predict(frame_bgr) if secondary_weapon_det is not None else []
-    detections = _merge_detections(
-        weapon_detections, person_detections, det._label_for(2), secondary_weapon_detections
-    )
+    detections = _merge_detections(weapon_detections, person_detections, det._label_for(2))
     tracker = get_byte_tracker(stream_id)
     h, w = frame_bgr.shape[:2]
 

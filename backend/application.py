@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from bl.detection.class_names import load_class_names
-from bl.detection.config import MODEL_PATH, PERSON_MODEL_PATH, SECONDARY_WEAPON_MODEL_PATH
+from bl.detection.config import MODEL_PATH, PERSON_MODEL_PATH
 from bl.detection import state as det_state
 from bl.detection.yolo import YoloOnnxDetector
 from bl.seed_service import seed_admin_if_needed
@@ -44,20 +44,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.exception("startup.person_model_failed path=%s", PERSON_MODEL_PATH)
         det_state.person_detector = None
 
-    try:
-        det_state.secondary_weapon_detector = YoloOnnxDetector(
-            SECONDARY_WEAPON_MODEL_PATH, {0: "Gun", 1: "Knife"}
-        )
-    except Exception:
-        logger.exception("startup.secondary_weapon_model_failed path=%s", SECONDARY_WEAPON_MODEL_PATH)
-        det_state.secondary_weapon_detector = None
-
     logger.info(
-        "startup.ready model_loaded=%s person_model_loaded=%s secondary_weapon_model_loaded=%s "
-        "weapon_ort_providers=%s person_ort_providers=%s",
+        "startup.ready model_loaded=%s person_model_loaded=%s weapon_ort_providers=%s person_ort_providers=%s",
         det_state.detector is not None,
         det_state.person_detector is not None,
-        det_state.secondary_weapon_detector is not None,
         getattr(det_state.detector, "_providers_used", []),
         getattr(det_state.person_detector, "_providers_used", []),
     )

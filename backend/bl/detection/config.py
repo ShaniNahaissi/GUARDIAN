@@ -6,10 +6,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 MODEL_PATH = _REPO_ROOT / "trained_model" / "guardian_backend_model.onnx"
 NAMES_PATH = MODEL_PATH.parent / "names.txt"
 PERSON_MODEL_PATH = _REPO_ROOT / "trained_model" / "yolov8n_person.onnx"
-# Second, independently-trained weapon model (guns/knife) ensembled with the primary detector for
-# higher recall -- see JoaoAssalim/Weapons-and-Knives-Detector-with-YOLOv8 (MIT), which ships a
-# ready-to-use ONNX export. Optional: pipeline runs fine without it if the file is missing.
-SECONDARY_WEAPON_MODEL_PATH = _REPO_ROOT / "trained_model" / "external" / "weapon_secondary.onnx"
 INPUT_SIZE = 640
 
 # Matches ultralytics' own model.predict() defaults (conf=0.25, iou=0.7), so live detections

@@ -7,5 +7,4 @@ if TYPE_CHECKING:
 
 detector: YoloOnnxDetector | None = None
 person_detector: YoloOnnxDetector | None = None
-secondary_weapon_detector: YoloOnnxDetector | None = None
 CLASS_NAMES: dict[int, str] = {}
