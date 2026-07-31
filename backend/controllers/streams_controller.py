@@ -44,7 +44,6 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
     metrics_tracker = SystemMetricsTracker()
     try:
         while True:
-            start = time.perf_counter()
             payload = await websocket.receive_bytes()
             array = np.frombuffer(payload, dtype=np.uint8)
             frame = cv2.imdecode(array, cv2.IMREAD_COLOR)
@@ -57,6 +56,7 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
                 continue
 
             frame_count += 1
+            start = time.perf_counter()
             try:
                 jpeg_bytes, track_payload, detections = await asyncio.to_thread(
                     process_frame_pipeline,
