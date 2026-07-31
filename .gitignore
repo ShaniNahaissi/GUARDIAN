@@ -213,3 +213,10 @@ temporal_training/figures/
 temporal_training/raw_ucf_crime/
 
 data/
+
+# Local deploy config (server host/user/key path — see deploy.env.example)
+deploy.env
+deploy_key
+deploy_key.pub
+known_hosts
+deploy-password.env
