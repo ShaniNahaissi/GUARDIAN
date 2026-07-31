@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from bl.detection.config import INPUT_SIZE
+from bl.detection.config import INPUT_SIZE, WEAPON_CONF_THRESHOLD, WEAPON_IOU_THRESHOLD
 from bl.detection.providers import select_onnx_providers
 
 
@@ -63,8 +63,8 @@ class YoloOnnxDetector:
         orig_shape: tuple[int, int],
         scale: float,
         pad: tuple[float, float],
-        conf_threshold: float = 0.35,
-        iou_threshold: float = 0.45,
+        conf_threshold: float = WEAPON_CONF_THRESHOLD,
+        iou_threshold: float = WEAPON_IOU_THRESHOLD,
     ) -> list[Detection]:
         h, w = orig_shape
         preds = output
