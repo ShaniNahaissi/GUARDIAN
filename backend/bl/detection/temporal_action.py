@@ -173,37 +173,23 @@ class NumPyCNNClassifier:
         self.hidden_channels = hidden_channels
         self.num_classes = num_classes
 
-        # Load weights or initialize
-        self.weights_loaded = False
+        # Untrained (random) weights would silently make threat detection non-functional --
+        # fail loudly at startup instead of shipping a classifier that can never really alert.
         weights_path = Path(__file__).resolve().parents[3] / "trained_model" / "temporal_action_weights.npz"
-
-        if weights_path.exists():
-            try:
-                data = np.load(weights_path)
-                self.conv1_w = data["conv1_w"]
-                self.conv1_b = data["conv1_b"]
-                self.conv2_w = data["conv2_w"]
-                self.conv2_b = data["conv2_b"]
-                self.fc_w = data["fc_w"]
-                self.fc_b = data["fc_b"]
-                self.weights_loaded = True
-                logger.info("Loaded temporal action weights from %s", weights_path)
-            except Exception as e:
-                logger.error("Failed to load weights: %s. Re-initializing...", e)
-
-        if not self.weights_loaded:
-            # Initialize weights deterministically to avoid pure random drift
-            rng = np.random.default_rng(42)
-            self.conv1_w = rng.normal(0, 0.1, (hidden_channels, input_dim, KERNEL_SIZE)).astype(np.float32)
-            self.conv1_b = np.zeros(hidden_channels, dtype=np.float32)
-            self.conv2_w = rng.normal(0, 0.1, (hidden_channels, hidden_channels, KERNEL_SIZE)).astype(np.float32)
-            self.conv2_b = np.zeros(hidden_channels, dtype=np.float32)
-            self.fc_w = rng.normal(0, 0.1, (num_classes, hidden_channels)).astype(np.float32)
-            self.fc_b = np.zeros(num_classes, dtype=np.float32)
-            logger.warning(
-                "Initialized temporal action classifier with default weights (Not Trained). "
-                "Run temporal_training/temporal_training.ipynb to produce weights."
+        if not weights_path.exists():
+            raise FileNotFoundError(
+                f"Temporal action weights not found at {weights_path}. "
+                "Run temporal_training/temporal_training.ipynb to produce them."
             )
+
+        data = np.load(weights_path)
+        self.conv1_w = data["conv1_w"]
+        self.conv1_b = data["conv1_b"]
+        self.conv2_w = data["conv2_w"]
+        self.conv2_b = data["conv2_b"]
+        self.fc_w = data["fc_w"]
+        self.fc_b = data["fc_b"]
+        logger.info("Loaded temporal action weights from %s", weights_path)
 
     def forward(self, seq: np.ndarray) -> np.ndarray:
         """Runs the sequence through the conv stack and linear layer. seq shape: (seq_len, input_dim)"""
