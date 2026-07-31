@@ -44,6 +44,31 @@ const getReadableMediaError = (error: unknown): string => {
 const JPEG_QUALITY = 0.85;
 const JPEG_INTERVAL_MS = 120;
 
+// Browsers throttle setInterval/setTimeout in background/minimized tabs to ~1 tick/sec, which
+// would silently drop the capture rate to 1 fps. A dedicated Worker's timers aren't subject to
+// that page-visibility throttling, so the tick source lives there; the worker only ever posts
+// an empty "tick" message back -- canvas/video capture still happens on the main thread.
+const createTickWorker = () =>
+  new Worker(
+    URL.createObjectURL(
+      new Blob(
+        [
+          `let id = null;
+           onmessage = (e) => {
+             if (e.data === 'start') {
+               if (id) clearInterval(id);
+               id = setInterval(() => postMessage('tick'), ${JPEG_INTERVAL_MS});
+             } else if (e.data === 'stop') {
+               clearInterval(id);
+               id = null;
+             }
+           };`,
+        ],
+        { type: 'application/javascript' },
+      ),
+    ),
+  );
+
 export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) => {
   const [streamUuid, setStreamUuid] = useState<string>(() => createDefaultStreamId());
   const [isStreaming, setIsStreaming] = useState(false);
@@ -55,15 +80,15 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const jpegIntervalRef = useRef<number | null>(null);
+  const jpegWorkerRef = useRef<Worker | null>(null);
   const fileObjectUrlRef = useRef<string | null>(null);
   const { showToast } = useToast();
   const { setStreamingActive } = useStreamingSession();
 
   const clearJpegInterval = () => {
-    if (jpegIntervalRef.current !== null) {
-      window.clearInterval(jpegIntervalRef.current);
-      jpegIntervalRef.current = null;
+    if (jpegWorkerRef.current !== null) {
+      jpegWorkerRef.current.terminate();
+      jpegWorkerRef.current = null;
     }
   };
 
@@ -117,7 +142,8 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
 
   const startJpegPump = () => {
     clearJpegInterval();
-    jpegIntervalRef.current = window.setInterval(() => {
+    const worker = createTickWorker();
+    worker.onmessage = () => {
       const v = videoRef.current;
       const ws = wsRef.current;
       const canvas = canvasRef.current;
@@ -143,7 +169,9 @@ export const CameraStreamPage: React.FC<CameraStreamPageProps> = ({ onBack }) =>
         'image/jpeg',
         JPEG_QUALITY,
       );
-    }, JPEG_INTERVAL_MS);
+    };
+    jpegWorkerRef.current = worker;
+    worker.postMessage('start');
   };
 
   const openProducerSocket = (onReady: () => void) => {
