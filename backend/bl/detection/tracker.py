@@ -45,15 +45,21 @@ class StreamTrackSmoother:
     """Wraps ByteTrack and applies responsive state management, instant detection display, and class smoothing."""
     def __init__(self, stream_id: str) -> None:
         self.stream_id = stream_id
-        # ByteTrack has its own activation confidence floor (default 0.25) independent of the
-        # detector's own threshold -- without this, boxes let through by WEAPON_CONF_THRESHOLD
-        # still never get tracked/displayed if they fall below ByteTrack's own default.
-        # minimum_matching_threshold also lowered from its 0.8 default: that's the IoU required
-        # between frames to keep the same track id, which is too strict for small/fast-moving
-        # objects like a gun and was causing frequent id churn/loss.
+        # ByteTrack internally requires det_thresh = track_activation_threshold + 0.1 to CREATE a
+        # brand-new track (see supervision's byte_tracker/core.py) -- a detection scoring between
+        # track_activation_threshold and that +0.1 bump can only continue an existing track, never
+        # start one. Passing WEAPON_CONF_THRESHOLD directly here left a 0.1-wide dead zone where
+        # nothing could ever get a first id. Subtracting 0.1 lines det_thresh back up with the
+        # detector's own floor, so anything we actually let through can start a track.
+        # minimum_matching_threshold lowered from its 0.8 default: that's the IoU required between
+        # frames to keep the same track id, too strict for small/fast-moving objects like a gun.
+        # lost_track_buffer raised from 30: how many frames a track survives with no matching
+        # detection before it's dropped -- higher lets sparse/intermittent weapon detections still
+        # bridge back to the same id instead of dying and needing to re-clear det_thresh again.
         self.tracker = sv.ByteTrack(
-            track_activation_threshold=WEAPON_CONF_THRESHOLD,
+            track_activation_threshold=max(0.0, WEAPON_CONF_THRESHOLD - 0.1),
             minimum_matching_threshold=0.3,
+            lost_track_buffer=60,
         )
         self.active_tracks: dict[int, TrackState] = {}
         self.lock = threading.Lock()
