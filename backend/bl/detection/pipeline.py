@@ -33,26 +33,29 @@ def remove_feature_extractor(stream_id: str) -> None:
         _feature_extractors.pop(stream_id, None)
 
 
-def _should_trigger_action_recognition(tracked_list: list[dict[str, Any]], frame_shape: tuple[int, int]) -> bool:
-    """Early-exit checker: only run the CNN action classifier if weapons exist or multiple suspects are in close proximity."""
+def _should_trigger_action_recognition(detections: list[Detection], frame_shape: tuple[int, int]) -> bool:
+    """Early-exit checker: only run the CNN action classifier if weapons exist or multiple suspects are in close
+    proximity. Takes this frame's raw detections (not the tracked/confirmed list) -- ByteTrack can take several
+    frames to confirm a new track, which would otherwise delay/suppress triggering on a weapon that's genuinely
+    visible right now."""
     h, w = frame_shape
-    
-    # 1. Trigger if any weapon class is tracked (class_id 0: Gun, 1: Knife)
-    has_weapon = any(t["class_id"] in (0, 1) for t in tracked_list)
+
+    # 1. Trigger if any weapon class is present (class_id 0: Gun, 1: Knife)
+    has_weapon = any(d.class_id in (0, 1) for d in detections)
     if has_weapon:
         return True
-        
+
     # 2. Trigger if multiple suspects (class_id 2) are in close proximity (<35% of frame width/height or overlapping)
-    suspect_tracks = [t for t in tracked_list if t["class_id"] == 2]
+    suspect_tracks = [d for d in detections if d.class_id == 2]
     if len(suspect_tracks) >= 2:
         for i in range(len(suspect_tracks)):
             s1 = suspect_tracks[i]
-            x1_1, y1_1, x2_1, y2_1 = s1["bbox"]
+            x1_1, y1_1, x2_1, y2_1 = s1.xyxy
             cx1, cy1 = (x1_1 + x2_1) / 2, (y1_1 + y2_1) / 2
-            
+
             for j in range(i + 1, len(suspect_tracks)):
                 s2 = suspect_tracks[j]
-                x1_2, y1_2, x2_2, y2_2 = s2["bbox"]
+                x1_2, y1_2, x2_2, y2_2 = s2.xyxy
                 cx2, cy2 = (x1_2 + x2_2) / 2, (y1_2 + y2_2) / 2
                 
                 # Center-to-center distance normalized by frame dimensions
@@ -113,7 +116,7 @@ def process_frame_pipeline(
         tracked_list = tracker.update_with_detections(sv.Detections(xyxy=xyxy, confidence=conf, class_id=cls))
 
     # Evaluate early-exit triggering logic
-    run_action_classifier = _should_trigger_action_recognition(tracked_list, (h, w))
+    run_action_classifier = _should_trigger_action_recognition(detections, (h, w))
     
     extractor = get_feature_extractor(stream_id)
     # update histories (always done to maintain temporal trace consistency)
@@ -199,6 +202,23 @@ def process_frame_pipeline(
                 "bbox": [x1, y1, x2, y2],
                 "class_name": cname,
                 "confidence": score,
+            }
+        )
+
+    # Weapons are shown straight from this frame's raw detections, not the tracked/confirmed list --
+    # ByteTrack can take several frames to confirm a new track (or drop it entirely if the box jitters),
+    # which would otherwise hide a weapon that's genuinely visible right now. Suspects still go through
+    # the tracker above since action recognition needs their persistent track_id across frames.
+    for i, d in enumerate(d for d in detections if d.class_id in (0, 1)):
+        x1, y1, x2, y2 = d.xyxy
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w - 1, x2), min(h - 1, y2)
+        tracks_out.append(
+            {
+                "track_id": -(i + 1),
+                "bbox": [x1, y1, x2, y2],
+                "class_name": det._label_for(d.class_id),
+                "confidence": d.score,
             }
         )
 

@@ -6,6 +6,8 @@ from typing import Any
 import numpy as np
 import supervision as sv
 
+from bl.detection.config import WEAPON_CONF_THRESHOLD
+
 logger = logging.getLogger("guardian.tracker")
 
 class TrackState:
@@ -43,7 +45,10 @@ class StreamTrackSmoother:
     """Wraps ByteTrack and applies responsive state management, instant detection display, and class smoothing."""
     def __init__(self, stream_id: str) -> None:
         self.stream_id = stream_id
-        self.tracker = sv.ByteTrack()
+        # ByteTrack has its own activation confidence floor (default 0.25) independent of the
+        # detector's own threshold -- without this, boxes let through by WEAPON_CONF_THRESHOLD
+        # still never get tracked/displayed if they fall below ByteTrack's own default.
+        self.tracker = sv.ByteTrack(track_activation_threshold=WEAPON_CONF_THRESHOLD)
         self.active_tracks: dict[int, TrackState] = {}
         self.lock = threading.Lock()
 
