@@ -4,10 +4,6 @@ on:
   push:
     branches:
       - main
-      - improve-model-people-recognition
-      ## - dev
-      ## TODO: Check best practice
-      
 
 jobs:
   deploy:
@@ -16,7 +12,7 @@ jobs:
     steps:
       - name: Deploy Code
         run: |
-          cd /home/cs507/GUARDIAN
+          cd /home/deep/GUARDIAN
           git fetch origin ${{ github.ref_name }}
           git reset --hard origin/${{ github.ref_name }}
           docker compose -f docker-compose.yml up --build --force-recreate -d
