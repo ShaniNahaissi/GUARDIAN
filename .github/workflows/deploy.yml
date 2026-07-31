@@ -16,4 +16,3 @@ jobs:
           git fetch origin ${{ github.ref_name }}
           git reset --hard origin/${{ github.ref_name }}
           docker compose -f docker-compose.yml up --build --force-recreate -d
-          
