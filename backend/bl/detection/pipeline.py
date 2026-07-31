@@ -140,8 +140,13 @@ def process_frame_pipeline(
             c2_y = (seq_feat[-1][1] + seq_feat[-1][3]) / 2
             displacement = ((c1_x - c2_x) ** 2 + (c1_y - c2_y) ** 2) ** 0.5
 
-            # Static check: displacement < 2% of frame size defaults to Normal
-            if displacement < 0.02:
+            # Static check: displacement < 2% of frame size defaults to Normal. Only trust this for
+            # a track with a FULL real window of history -- a track younger than window_size is
+            # left-padded by repeating its first known state (see TemporalFeatureExtractor), which
+            # makes it look artificially motionless and would otherwise short-circuit to Normal
+            # before the classifier ever runs even once.
+            track_hist_len = len(extractor.history.get(tid, []))
+            if displacement < 0.02 and track_hist_len >= extractor.window_size:
                 action_label = "Normal"
                 score = 1.0
             else:
