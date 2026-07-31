@@ -64,6 +64,7 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
                     frame,
                     detector,
                     det_state.person_detector,
+                    det_state.secondary_weapon_detector,
                 )
             except Exception:
                 logger.exception("stream.producer.process_failed stream_id=%s frame=%s", stream_id, frame_count)
