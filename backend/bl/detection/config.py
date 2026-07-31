@@ -12,3 +12,11 @@ INPUT_SIZE = 640
 # match what the training notebook's evaluate_threat()/report video showed on the same footage.
 WEAPON_CONF_THRESHOLD = float(os.environ.get("GUARDIAN_WEAPON_CONF_THRESHOLD", "0.25"))
 WEAPON_IOU_THRESHOLD = float(os.environ.get("GUARDIAN_WEAPON_IOU_THRESHOLD", "0.7"))
+
+# CLAHE contrast boost + unsharp-mask sharpening applied only to the frame fed into the detector
+# model (never to the frame shown to viewers) -- see YoloOnnxDetector._preprocess.
+ENHANCE_DETECTION_INPUT = os.environ.get("GUARDIAN_ENHANCE_DETECTION_INPUT", "1").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+)

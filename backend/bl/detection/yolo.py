@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from bl.detection.config import INPUT_SIZE, WEAPON_CONF_THRESHOLD, WEAPON_IOU_THRESHOLD
+from bl.detection.config import ENHANCE_DETECTION_INPUT, INPUT_SIZE, WEAPON_CONF_THRESHOLD, WEAPON_IOU_THRESHOLD
 from bl.detection.providers import select_onnx_providers
 
 
@@ -17,6 +17,19 @@ class Detection:
     score: float
     label: str
     class_id: int
+
+
+def _enhance_for_detection(image: np.ndarray) -> np.ndarray:
+    """CLAHE contrast boost on the L channel + unsharp-mask sharpening, to make weapon edges/detail
+    easier for the model to pick up on dim/flat CCTV footage. Model input only -- the caller's own
+    frame (what gets shown to viewers) is never touched."""
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    l = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(l)
+    contrasted = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+
+    blurred = cv2.GaussianBlur(contrasted, (0, 0), sigmaX=3)
+    return cv2.addWeighted(contrasted, 1.5, blurred, -0.5, 0)
 
 
 class YoloOnnxDetector:
@@ -52,6 +65,9 @@ class YoloOnnxDetector:
         pad_x = (self.image_size - nw) // 2
         pad_y = (self.image_size - nh) // 2
         canvas[pad_y : pad_y + nh, pad_x : pad_x + nw] = resized
+
+        if ENHANCE_DETECTION_INPUT:
+            canvas = _enhance_for_detection(canvas)
 
         blob = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
         blob = np.transpose(blob, (2, 0, 1))[None, ...]
