@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 numpy
 opencv-python
-onnxruntime-gpu
+onnxruntime-gpu==1.20.2
 python-multipart
 supervision>=0.22.0
 sqlalchemy[asyncio]>=2.0

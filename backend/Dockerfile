@@ -1,4 +1,4 @@
-FROM nvidia/cuda:13.0.3-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,8 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Python 3.11 (matches previous python:3.11-slim base) + runtime libs required by OpenCV/ONNX.
-# onnxruntime-gpu needs CUDA 13 + cuDNN 9, which is why the base image changed from
-# python:3.11-slim to nvidia/cuda -- see bl/detection/providers.py.
+# onnxruntime-gpu (pinned to 1.20.2 in requirements.txt) needs CUDA 12 + cuDNN 9 to actually
+# use the GPU instead of silently falling back to CPU -- see bl/detection/providers.py.
+# 12.8 specifically matches this deploy server's driver (570.211.01, max supported CUDA 12.8);
+# newer onnxruntime-gpu releases require CUDA 13, which this driver doesn't support.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     curl \
