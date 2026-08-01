@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - detection-pipeline-stability
 
 jobs:
   deploy:
