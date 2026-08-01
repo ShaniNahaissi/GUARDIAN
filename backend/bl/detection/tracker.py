@@ -6,7 +6,13 @@ from typing import Any
 import numpy as np
 import supervision as sv
 
-from bl.detection.config import WEAPON_CONF_THRESHOLD
+from bl.detection.config import (
+    BBOX_SMOOTH_ALPHA,
+    CONFIDENCE_DECAY,
+    SUSPECT_GHOST_FRAMES,
+    WEAPON_CONF_THRESHOLD,
+    WEAPON_GHOST_FRAMES,
+)
 
 logger = logging.getLogger("guardian.tracker")
 
@@ -20,6 +26,8 @@ class TrackState:
         self.missed_frames = 0
         self.total_detections = 1
         self.latest_bbox = bbox
+        # EMA-smoothed coordinates, initialised to the first detection.
+        self._smooth_bbox: list[float] = [float(c) for c in bbox]
 
     def update(self, bbox: list[int], score: float) -> None:
         self.latest_bbox = bbox
@@ -32,9 +40,21 @@ class TrackState:
         self.missed_frames = 0
         self.total_detections += 1
 
+        # Update EMA-smoothed bounding box.
+        alpha = BBOX_SMOOTH_ALPHA
+        self._smooth_bbox = [
+            alpha * float(new) + (1 - alpha) * old
+            for new, old in zip(bbox, self._smooth_bbox)
+        ]
+
     def get_latest_bbox(self) -> list[int]:
-        """Returns the raw latest bounding box for maximum responsiveness and zero coordinate lag."""
+        """Returns the raw latest bounding box (no smoothing)."""
         return self.latest_bbox
+
+    def get_smoothed_bbox(self) -> list[int]:
+        """Returns EMA-smoothed bounding box coordinates (rounded to int for pixel display).
+        Eliminates frame-to-frame jitter while still tracking movement."""
+        return [int(round(c)) for c in self._smooth_bbox]
 
     def get_latest_score(self) -> float:
         """Returns the latest confidence score."""
@@ -42,7 +62,8 @@ class TrackState:
 
 
 class StreamTrackSmoother:
-    """Wraps ByteTrack and applies responsive state management, instant detection display, and class smoothing."""
+    """Wraps ByteTrack and applies responsive state management, EMA-smoothed bbox display,
+    configurable ghost-frame persistence, and class smoothing."""
     def __init__(self, stream_id: str) -> None:
         self.stream_id = stream_id
         # ByteTrack internally requires det_thresh = track_activation_threshold + 0.1 to CREATE a
@@ -91,16 +112,20 @@ class StreamTrackSmoother:
                     else:
                         self.active_tracks[tid] = TrackState(tid, cid, [x1, y1, x2, y2], score)
             
-            # Handle missed tracks (flicker recovery / ghost tracks)
+            # Handle missed tracks (ghost-frame persistence).
+            # Weapons and suspects now have independently configurable survival windows
+            # so intermittent detections bridge across missed frames instead of flickering.
             dead_tids = []
             for tid, state in self.active_tracks.items():
                 if tid not in seen_tids:
                     state.missed_frames += 1
-                    # Suspects (class 2) survive 1 frame, weapons (class 0, 1) survive 0 frames to prevent ghosting
-                    max_missed = 1 if state.class_id == 2 else 0
+                    if state.class_id in (0, 1):
+                        max_missed = WEAPON_GHOST_FRAMES
+                    else:
+                        max_missed = SUSPECT_GHOST_FRAMES
                     if state.missed_frames <= max_missed:
-                        # Decay confidence score per missed frame
-                        decayed_score = state.get_latest_score() * 0.7
+                        # Gentler confidence decay per missed frame (configurable via env).
+                        decayed_score = state.get_latest_score() * CONFIDENCE_DECAY
                         state.score_history.append(decayed_score)
                     else:
                         dead_tids.append(tid)
@@ -108,13 +133,13 @@ class StreamTrackSmoother:
             for tid in dead_tids:
                 self.active_tracks.pop(tid, None)
                 
-            # Compile outputs
+            # Compile outputs -- use EMA-smoothed bounding boxes for visual stability.
             tracks_out = []
             for tid, state in self.active_tracks.items():
                 # Detections appear immediately (total_detections >= 1) to eliminate latency in UI box display
                 tracks_out.append({
                     "track_id": tid,
-                    "bbox": state.get_latest_bbox(),
+                    "bbox": state.get_smoothed_bbox(),
                     "class_id": state.class_id,
                     "confidence": state.get_latest_score(),
                     "missed_frames": state.missed_frames,

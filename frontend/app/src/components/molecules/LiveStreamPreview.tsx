@@ -53,6 +53,14 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
     return () => observer.disconnect();
   }, []);
 
+  /** Returns border + label color based on track class. */
+  const getTrackColor = (className: string): string => {
+    if (className === 'Gun' || className === 'Knife') return '#ef4444';        // red — weapon
+    if (className.startsWith('Suspect (')) return '#dc2626';                    // bright red — active threat
+    if (className === 'Suspect') return '#f59e0b';                             // amber — person tracked
+    return '#60a5fa';                                                          // blue — fallback
+  };
+
   const getBboxStyle = (bbox: [number, number, number, number]): React.CSSProperties => {
     const { naturalWidth, naturalHeight } = imgDim;
     const { width, height } = clientDim;
@@ -76,6 +84,9 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
       width: `${boxWidth}px`,
       height: `${boxHeight}px`,
       position: 'absolute',
+      // Client-side interpolation: smooth bbox position/size transitions to further
+      // reduce visual jitter on top of the backend's EMA-smoothed coordinates.
+      transition: 'left 100ms linear, top 100ms linear, width 100ms linear, height 100ms linear',
     };
   };
 
@@ -163,17 +174,30 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
             className="absolute inset-0 w-full h-full object-cover" 
             onLoad={handleImageLoad}
           />
-          {lastMeta?.tracks.map(track => (
-            <div 
-              key={track.track_id}
-              className="border-[3px] border-guardian-accent shadow-[0_0_10px_rgba(239,68,68,0.5)] pointer-events-none z-20 flex flex-col items-start"
-              style={{ ...getBboxStyle(track.bbox), borderColor: '#ef4444' }}
-            >
-              <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap mt-[-24px]">
-                {track.class_name} {Math.round(track.confidence * 100)}%
-              </span>
-            </div>
-          ))}
+          {lastMeta?.tracks.map(track => {
+            const color = getTrackColor(track.class_name);
+            const isActiveThreat = track.class_name.startsWith('Suspect (');
+            return (
+              <div 
+                key={track.track_id}
+                className={`border-[3px] pointer-events-none z-20 flex flex-col items-start ${
+                  isActiveThreat ? 'animate-pulse' : ''
+                }`}
+                style={{
+                  ...getBboxStyle(track.bbox),
+                  borderColor: color,
+                  boxShadow: `0 0 10px ${color}80`,
+                }}
+              >
+                <span
+                  className="text-white text-xs font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap mt-[-24px]"
+                  style={{ backgroundColor: color }}
+                >
+                  {track.class_name} {Math.round(track.confidence * 100)}%
+                </span>
+              </div>
+            );
+          })}
         </>
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-guardian-muted text-xs px-3 text-center gap-1">

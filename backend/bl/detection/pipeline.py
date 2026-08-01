@@ -9,14 +9,10 @@ import cv2
 import numpy as np
 import supervision as sv
 
+from bl.detection.config import ACTION_CONF_THRESHOLD
 from bl.detection.tracker import get_byte_tracker, next_frame_seq
 from bl.detection.yolo import Detection, YoloOnnxDetector
 from bl.detection.temporal_action import NumPyCNNClassifier, TemporalFeatureExtractor, ACTION_CLASSES
-from bl.detection.metrics import compute_iou
-
-# Minimum box overlap to consider a raw weapon detection the same object as a ByteTrack-confirmed
-# weapon track this frame, so its real persistent track_id can be reused instead of a placeholder.
-_WEAPON_TRACK_MATCH_IOU = 0.3
 
 logger = logging.getLogger("guardian.pipeline")
 
@@ -84,15 +80,35 @@ def _merge_detections(
     person_detections: list[Detection],
     suspect_label: str,
 ) -> list[Detection]:
-    """Keeps only weapon classes (0: Gun, 1: Knife) from the custom model, and remaps
-    the pretrained person model's COCO `person` class (0) to Guardian's Suspect class (2)."""
+    """Keeps only weapon classes (0: Gun, 1: Knife) from the custom model, remaps the pretrained
+    person model's COCO `person` class (0) to Guardian's Suspect class (2), and applies cross-model
+    NMS to de-duplicate suspect boxes when both the custom model and person model detect the same
+    physical person."""
     weapons = [d for d in weapon_detections if d.class_id in (0, 1)]
-    people = [
+    
+    # Collect suspects from both sources.
+    suspects: list[Detection] = [d for d in weapon_detections if d.class_id == 2]
+    suspects += [
         Detection(xyxy=d.xyxy, score=d.score, label=suspect_label, class_id=2)
         for d in person_detections
         if d.class_id == 0
     ]
-    return weapons + people
+    
+    # Cross-model NMS: de-duplicate suspect boxes from both detectors.
+    # Without this, the tracker sees two overlapping boxes for the same person
+    # (one from the weapon model's "Suspect" class, one from the COCO person model)
+    # which confuses track assignment and inflates suspect count.
+    if len(suspects) > 1:
+        boxes = [[x1, y1, x2 - x1, y2 - y1] for (x1, y1, x2, y2) in (d.xyxy for d in suspects)]
+        scores = [d.score for d in suspects]
+        keep = cv2.dnn.NMSBoxes(boxes, scores, 0.0, 0.5)
+        if keep is not None and (not hasattr(keep, "__len__") or len(keep) > 0):
+            keep_idxs = np.asarray(keep).flatten()
+            suspects = [suspects[int(i)] for i in keep_idxs]
+        else:
+            suspects = []
+    
+    return weapons + suspects
 
 
 def process_frame_pipeline(
@@ -111,7 +127,10 @@ def process_frame_pipeline(
     tracker = get_byte_tracker(stream_id)
     h, w = frame_bgr.shape[:2]
 
-    # Convert detector outputs to supervision format and run tracking update
+    # Convert detector outputs to supervision format and run tracking update.
+    # ALL classes (weapons AND suspects) now go through ByteTrack for stable tracking.
+    # The old code bypassed the tracker for weapons and showed raw per-frame detections,
+    # which caused heavy flickering (new box/ID every frame) — see implementation_plan.md.
     if not detections:
         tracked_list = tracker.update_with_detections(sv.Detections.empty())
     else:
@@ -145,8 +164,13 @@ def process_frame_pipeline(
             # left-padded by repeating its first known state (see TemporalFeatureExtractor), which
             # makes it look artificially motionless and would otherwise short-circuit to Normal
             # before the classifier ever runs even once.
+            #
+            # WEAPON-AWARE OVERRIDE: if any weapon was detected anywhere in the temporal window,
+            # NEVER short-circuit to Normal — a stationary person holding a weapon IS an active
+            # threat. The old code would classify a motionless gunman as "Normal".
             track_hist_len = len(extractor.history.get(tid, []))
-            if displacement < 0.02 and track_hist_len >= extractor.window_size:
+            has_weapon_in_window = extractor.has_weapon_in_window()
+            if displacement < 0.02 and track_hist_len >= extractor.window_size and not has_weapon_in_window:
                 action_label = "Normal"
                 score = 1.0
             else:
@@ -155,8 +179,11 @@ def process_frame_pipeline(
                 action_latency_ms += (time.perf_counter() - t_action) * 1000
                 action_label = ACTION_CLASSES.get(action_idx, "Normal")
             
-            # 2. Confidence filtering: Only override class name if threat confidence is high (>= 70%)
-            if action_label != "Normal" and score >= 0.70:
+            # 2. Confidence filtering: Only override class name if threat confidence is above threshold.
+            # Threshold lowered from 0.70 to configurable ACTION_CONF_THRESHOLD (default 0.50)
+            # because the old 70% gate, combined with noisy weapon-proximity features, meant
+            # the classifier could almost never classify a real threat.
+            if action_label != "Normal" and score >= ACTION_CONF_THRESHOLD:
                 predicted_actions[tid] = (action_label, score)
                 logger.warning(
                     "threat_alert detected stream_id=%s track_id=%d action=%s confidence=%.2f%%",
@@ -178,23 +205,20 @@ def process_frame_pipeline(
                 "track_id": tid,
                 "start_frame_seq": track_hist[0]["frame_seq"] if track_hist else seq,
                 "end_frame_seq": seq,
-                "action_label": action_label if (action_label != "Normal" and score >= 0.70) else "Normal",
-                "action_confidence": score if (action_label != "Normal" and score >= 0.70) else 1.0,
+                "action_label": action_label if (action_label != "Normal" and score >= ACTION_CONF_THRESHOLD) else "Normal",
+                "action_confidence": score if (action_label != "Normal" and score >= ACTION_CONF_THRESHOLD) else 1.0,
                 "best_frame_seq": best_frame_seq,
                 "best_frame_score": best_frame_score,
             })
 
-    # Format tracks payload output
+    # Format tracks payload output.
+    # ALL tracks (weapons AND suspects) now come from the tracked list — no more
+    # bypassing the tracker for weapons with raw per-frame detections.
     tracks_out: list[dict[str, Any]] = []
     for t in tracked_list:
         tid = t["track_id"]
         cid = t["class_id"]
         score = t["confidence"]
-
-        # Weapons are handled in the block below, straight from this frame's raw detections --
-        # skip them here so a ByteTrack-confirmed weapon doesn't get added twice.
-        if cid in (0, 1):
-            continue
 
         x1, y1, x2, y2 = t["bbox"]
 
@@ -218,44 +242,6 @@ def process_frame_pipeline(
                 "bbox": [x1, y1, x2, y2],
                 "class_name": cname,
                 "confidence": score,
-            }
-        )
-
-    # Weapons are shown straight from this frame's raw detections, not the tracked/confirmed list --
-    # ByteTrack can take several frames to confirm a new track (or drop it entirely if the box jitters),
-    # which would otherwise hide a weapon that's genuinely visible right now. Suspects still go through
-    # the tracker above since action recognition needs their persistent track_id across frames.
-    #
-    # Still reuse ByteTrack's own id when it has a confirmed weapon track overlapping this box, so the
-    # displayed id is a real persistent identity whenever the tracker has one -- falling back to a
-    # per-frame placeholder (negative, not persistent) only for weapons ByteTrack hasn't confirmed yet.
-    tracked_weapons = [t for t in tracked_list if t["class_id"] in (0, 1)]
-    next_placeholder_id = -1
-    for d in detections:
-        if d.class_id not in (0, 1):
-            continue
-
-        matched_tid: int | None = None
-        best_iou = _WEAPON_TRACK_MATCH_IOU
-        for t in tracked_weapons:
-            iou = compute_iou(tuple(d.xyxy), tuple(t["bbox"]))
-            if iou >= best_iou:
-                best_iou = iou
-                matched_tid = t["track_id"]
-
-        if matched_tid is None:
-            matched_tid = next_placeholder_id
-            next_placeholder_id -= 1
-
-        x1, y1, x2, y2 = d.xyxy
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(w - 1, x2), min(h - 1, y2)
-        tracks_out.append(
-            {
-                "track_id": matched_tid,
-                "bbox": [x1, y1, x2, y2],
-                "class_name": det._label_for(d.class_id),
-                "confidence": d.score,
             }
         )
 

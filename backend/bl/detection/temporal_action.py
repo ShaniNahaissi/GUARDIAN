@@ -18,11 +18,25 @@ ACTION_CLASSES = {
 }
 
 class TemporalFeatureExtractor:
-    """Compiles track histories and computes multi-frame feature vectors for action recognition."""
+    """Compiles track histories and computes multi-frame feature vectors for action recognition.
+    
+    Key fix: weapon bounding boxes are now stored per-frame in the history so that weapon-proximity
+    features (min_dist_weapon, overlap_weapon) reflect the actual weapon positions at each historical
+    timestep, not just the current frame's weapons projected across the entire window."""
     def __init__(self, window_size: int = 30) -> None:
         self.window_size = window_size
         # Dictionary mapping track_id -> list of raw track states: (bbox [x1, y1, x2, y2], confidence, timestamp)
         self.history: dict[int, list[dict[str, Any]]] = {}
+        # Per-frame weapon positions, keyed by frame_seq so that historical feature extraction
+        # can look up where weapons were at each past timestep instead of using only the current
+        # frame's weapons for all 30 steps (which was the root cause of broken proximity features).
+        self._weapon_history: list[dict[str, Any]] = []
+
+    def has_weapon_in_window(self) -> bool:
+        """Returns True if any weapon was detected within the recent temporal window.
+        Used by the pipeline to make the static-displacement filter weapon-aware —
+        a stationary person near a weapon should NOT be short-circuited to Normal."""
+        return len(self._weapon_history) > 0
 
     def update_and_extract(
         self,
@@ -51,12 +65,26 @@ class TemporalFeatureExtractor:
             if len(self.history[tid]) > self.window_size:
                 self.history[tid].pop(0)
 
+        # Store this frame's weapon positions in the per-frame weapon history.
+        weapon_tracks_this_frame = [t for t in active_tracks if t["class_id"] in (0, 1)]
+        weapon_entry = {
+            "frame_seq": frame_seq,
+            "weapons": [{"bbox": t["bbox"], "class_id": t["class_id"]} for t in weapon_tracks_this_frame],
+        }
+        self._weapon_history.append(weapon_entry)
+        if len(self._weapon_history) > self.window_size:
+            self._weapon_history.pop(0)
+
+        # Build a lookup from frame_seq -> list of weapon bboxes for efficient historical access.
+        weapon_by_frame: dict[int, list[dict[str, Any]]] = {}
+        for entry in self._weapon_history:
+            weapon_by_frame[entry["frame_seq"]] = entry["weapons"]
+
         # Extract features for each Suspect track (class_id = 2 is Suspect in names.txt)
         sequences: dict[int, np.ndarray] = {}
         
-        # Separate weapons and suspects
-        weapon_tracks = [t for t in active_tracks if t["class_id"] in (0, 1)] # 0: Gun, 1: Knife
-        suspect_tracks = [t for t in active_tracks if t["class_id"] == 2] # 2: Suspect
+        # Separate suspects for inter-suspect proximity (current frame).
+        suspect_tracks = [t for t in active_tracks if t["class_id"] == 2]
 
         for suspect in suspect_tracks:
             tid = suspect["track_id"]
@@ -91,19 +119,20 @@ class TemporalFeatureExtractor:
                 # 3. Detection Confidence
                 conf = state["confidence"]
                 
-                # 4. Proximity to weapons (relative distance and overlap)
+                # 4. Proximity to weapons — now uses HISTORICAL per-frame weapon positions
+                #    instead of projecting the current frame's weapons across the entire window.
                 min_dist_weapon = 1.0
                 overlap_weapon = 0.0
                 
-                # Find closest active weapon in this historical frame
-                # Since we don't have full history for other tracks in past frames, we approximate
-                # proximity using the current frame's active weapon tracks
+                hist_frame_seq = state["frame_seq"]
+                hist_weapons = weapon_by_frame.get(hist_frame_seq, [])
+                
                 s_cx, s_cy = (x1 + x2) / 2, (y1 + y2) / 2
-                for weapon in weapon_tracks:
+                for weapon in hist_weapons:
                     wx1, wy1, wx2, wy2 = weapon["bbox"]
                     w_cx, w_cy = (wx1 + wx2) / 2, (wy1 + wy2) / 2
                     
-                    # Center distance normalized by frame width
+                    # Center distance normalized by frame dimensions
                     dist = (((s_cx - w_cx) / w) ** 2 + ((s_cy - w_cy) / h) ** 2) ** 0.5
                     min_dist_weapon = min(min_dist_weapon, dist)
                     
@@ -115,7 +144,7 @@ class TemporalFeatureExtractor:
                     if ix2 > ix1 and iy2 > iy1:
                         overlap_weapon = 1.0
 
-                # 5. Proximity to other suspects
+                # 5. Proximity to other suspects (current frame only, same as before)
                 min_dist_suspect = 1.0
                 for other in suspect_tracks:
                     if other["track_id"] == tid:
