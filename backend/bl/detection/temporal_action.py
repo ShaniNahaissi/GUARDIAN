@@ -27,6 +27,13 @@ class TemporalFeatureExtractor:
         self.window_size = window_size
         # Dictionary mapping track_id -> list of raw track states: (bbox [x1, y1, x2, y2], confidence, timestamp)
         self.history: dict[int, list[dict[str, Any]]] = {}
+        # Last frame_seq at which each track was seen. Used to expire history entries
+        # only after a track has been absent for > window_size frames, rather than
+        # pruning eagerly on the very first frame a track is missing. Eager pruning
+        # caused the temporal classifier to lose a threat's action sequence mid-event
+        # when the track briefly exited ByteTrack's output (e.g. during ghost frames),
+        # resetting it to Normal before re-acquiring the same track.
+        self._last_seen: dict[int, int] = {}
         # Per-frame weapon positions, keyed by frame_seq so that historical feature extraction
         # can look up where weapons were at each past timestep instead of using only the current
         # frame's weapons for all 30 steps (which was the root cause of broken proximity features).
@@ -47,15 +54,26 @@ class TemporalFeatureExtractor:
         """Updates track history, calculates velocities & proximity features, and returns feature sequences."""
         h, w = frame_shape
         tids = {t["track_id"] for t in active_tracks}
-        
-        # Prune dead tracks from history
-        dead_ids = [tid for tid in self.history if tid not in tids]
+
+        # Expire tracks that have not been seen for more than window_size frames.
+        # Using window_size (not 1) as the threshold prevents premature history pruning:
+        # the smoother emits ghost tracks for a few frames after the object leaves the
+        # frame, but those ghost frames may not always reach the extractor in lock-step.
+        # Allowing window_size frames of absence before pruning means the classifier
+        # never loses a threat's action sequence mid-event due to a transient absence.
+        current_seq = frame_seq
+        dead_ids = [
+            tid for tid, last in self._last_seen.items()
+            if tid not in tids and (current_seq - last) > self.window_size
+        ]
         for tid in dead_ids:
             self.history.pop(tid, None)
-            
+            self._last_seen.pop(tid, None)
+
         # Update histories for active tracks
         for t in active_tracks:
             tid = t["track_id"]
+            self._last_seen[tid] = frame_seq
             self.history.setdefault(tid, []).append({
                 "bbox": t["bbox"],
                 "class_id": t["class_id"],
