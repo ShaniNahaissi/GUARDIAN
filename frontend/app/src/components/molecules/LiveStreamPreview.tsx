@@ -65,40 +65,24 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
     const { naturalWidth, naturalHeight } = imgDim;
     const { width, height } = clientDim;
     if (!naturalWidth || !naturalHeight || !width || !height) return { display: 'none' };
-
-    // object-cover: scale so the image fills the container, cropping the excess.
-    // xOffset / yOffset will be negative when the scaled image is wider/taller than the
-    // container — that is intentional (the image bleeds outside the box and is clipped).
+    
     const scale = Math.max(width / naturalWidth, height / naturalHeight);
     const scaledWidth = naturalWidth * scale;
     const scaledHeight = naturalHeight * scale;
-    const xOffset = (width - scaledWidth) / 2;   // ≤ 0 when image is wider than container
-    const yOffset = (height - scaledHeight) / 2; // ≤ 0 when image is taller than container
-
+    const xOffset = (width - scaledWidth) / 2;
+    const yOffset = (height - scaledHeight) / 2;
+    
     const [x1, y1, x2, y2] = bbox;
-    const rawLeft = xOffset + x1 * scale;
-    const rawTop = yOffset + y1 * scale;
-    const rawRight = xOffset + x2 * scale;
-    const rawBottom = yOffset + y2 * scale;
-
-    // Clamp the box to the visible container area so bounding boxes never render
-    // outside the viewport when the stream aspect ratio differs from the container.
-    // This also prevents negative left/top values that would misplace the div.
-    const clampedLeft = Math.max(0, rawLeft);
-    const clampedTop = Math.max(0, rawTop);
-    const clampedRight = Math.min(width, rawRight);
-    const clampedBottom = Math.min(height, rawBottom);
-    const clampedWidth = clampedRight - clampedLeft;
-    const clampedHeight = clampedBottom - clampedTop;
-
-    // If the entire box is outside the visible crop area, hide it entirely.
-    if (clampedWidth <= 0 || clampedHeight <= 0) return { display: 'none' };
-
+    const left = xOffset + x1 * scale;
+    const top = yOffset + y1 * scale;
+    const boxWidth = (x2 - x1) * scale;
+    const boxHeight = (y2 - y1) * scale;
+    
     return {
-      left: `${clampedLeft}px`,
-      top: `${clampedTop}px`,
-      width: `${clampedWidth}px`,
-      height: `${clampedHeight}px`,
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${boxWidth}px`,
+      height: `${boxHeight}px`,
       position: 'absolute',
       // Client-side interpolation: smooth bbox position/size transitions to further
       // reduce visual jitter on top of the backend's EMA-smoothed coordinates.
@@ -125,10 +109,6 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
 
     ws.onopen = () => {
       setStatus('live');
-      // Clear any stale bounding boxes from a previous session so the new feed
-      // starts clean. Without this, boxes from the last connection are visible
-      // until the first JSON track payload arrives from the new producer.
-      setLastMeta(null);
     };
 
     ws.onmessage = (ev: MessageEvent<Blob | string>) => {
@@ -155,9 +135,6 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
 
     ws.onerror = () => {
       setStatus('error');
-      // Propagate null so the parent CameraView drops threatActive/weaponPresent
-      // immediately instead of holding on to the last known threat state.
-      setLastMeta(null);
     };
 
     ws.onclose = () => {

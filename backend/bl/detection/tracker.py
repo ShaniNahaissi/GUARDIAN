@@ -16,15 +16,6 @@ from bl.detection.config import (
 
 logger = logging.getLogger("guardian.tracker")
 
-# The ByteTrack lost_track_buffer and the smoother's ghost-frame windows must be
-# kept in sync. If lost_track_buffer >> ghost frames, ByteTrack keeps emitting
-# predicted positions for far longer than the smoother is aware of, which means
-# seen_tids always contains the track, missed_frames never increments, and the
-# smoother's WEAPON_GHOST_FRAMES / SUSPECT_GHOST_FRAMES become dead code.
-# Deriving the buffer from the configured ghost windows makes both mechanisms
-# converge on the same track-expiry schedule.
-_LOST_TRACK_BUFFER = max(WEAPON_GHOST_FRAMES, SUSPECT_GHOST_FRAMES) + 2
-
 class TrackState:
     """Manages the state history of a single tracked object for temporal features and responsiveness."""
     def __init__(self, track_id: int, class_id: int, bbox: list[int], score: float) -> None:
@@ -83,15 +74,13 @@ class StreamTrackSmoother:
         # detector's own floor, so anything we actually let through can start a track.
         # minimum_matching_threshold lowered from its 0.8 default: that's the IoU required between
         # frames to keep the same track id, too strict for small/fast-moving objects like a gun.
-        # lost_track_buffer is derived from max(WEAPON_GHOST_FRAMES, SUSPECT_GHOST_FRAMES) + 2
-        # so that ByteTrack's own predicted-position window stays in lock-step with the smoother's
-        # ghost-frame windows. A much larger value (e.g. 60) causes ByteTrack to keep emitting
-        # predicted positions long after the smoother should have dropped the track, which prevents
-        # missed_frames from ever incrementing and makes ghost-frame config effectively inert.
+        # lost_track_buffer raised from 30: how many frames a track survives with no matching
+        # detection before it's dropped -- higher lets sparse/intermittent weapon detections still
+        # bridge back to the same id instead of dying and needing to re-clear det_thresh again.
         self.tracker = sv.ByteTrack(
             track_activation_threshold=max(0.0, WEAPON_CONF_THRESHOLD - 0.1),
             minimum_matching_threshold=0.3,
-            lost_track_buffer=_LOST_TRACK_BUFFER,
+            lost_track_buffer=60,
         )
         self.active_tracks: dict[int, TrackState] = {}
         self.lock = threading.Lock()
