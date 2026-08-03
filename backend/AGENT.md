@@ -1,10 +1,13 @@
 # Guardian Backend Agent Notes
 
 ## Goal
-- Python backend that receives video frames from frontend on a producer route.
-- Runs inference with ONNX model: `trained_model/guardian_backend_model.onnx`.
-- ByteTrack (via `supervision`) assigns persistent `track_id` per `stream_id`.
-- Consumers receive processed JPEG + JSON over WebSocket.
+- Python FastAPI backend that receives video frames from frontend on a producer route.
+- Runs inference with ensembled YOLOv8 models: custom static weapon detector (`trained_model/guardian_backend_model.onnx`) and COCO person detector (`trained_model/yolov8n_person.onnx`) with remapping.
+- App-side cross-model Non-Maximum Suppression (NMS) to merge overlapping suspect bounding boxes.
+- ByteTrack (via `supervision`) assigns persistent `track_id` across weapons and suspects.
+- A lightweight NumPy CNN temporal action classifier determines active threats (Shooting/Violence) over a 30-frame window.
+- Database integration logging frame metrics (latency, tracks, CPU/GPU, VRAM usage).
+- Consumers receive processed JPEG + JSON over WebSocket, or poll single snapshots.
 
 ## Stack
 - FastAPI + Uvicorn
@@ -13,22 +16,46 @@
 - `supervision` (ByteTrack): Trackers are tied to the producer's session and reset automatically on reconnect to prevent stale ghost tracks. The internal `lost_track_buffer` is kept synchronized with the custom ghost frame settings.
 
 ## Files
-- `backend/main.py`: full backend service.
+- `backend/main.py`: ASGI server entrypoint that runs the FastAPI `app` from `application.py`.
+- `backend/application.py`: application bootstrap, models loading, CORS setup, DB seeding/init, and request latency audit middleware.
 - `backend/requirements.txt`: Python dependencies.
-- `backend/Dockerfile`: container image for consistent backend runtime.
+- `backend/Dockerfile`: production container image.
 - `backend/Dockerfile.dev`: local dev image with auto-reload.
-- `backend/docker-compose.yml`: one-command local container run.
+- `backend/docker-compose.yml`: production-style multi-container setup.
 - `backend/docker-compose.dev.yml`: dev compose with bind-mount + auto-reload.
 
 ## Routes
-- `GET /health`: backend, model, and ORT provider status.
-- `GET /api/cameras`: camera list for frontend dashboard.
-- `POST /api/cameras`: add a camera.
-- `GET /api/stats`: simple aggregated stats for the frontend.
-- `WS /producer/{stream_id}`: producer ingest (**binary JPEG or PNG per message**).
-- `WS /consumer/{stream_id}`: consumer stream — for each processed frame the server sends **(1) binary** processed JPEG bytes, **(2) text JSON** with `{ stream_id, frame_seq, tracks: [{ track_id, bbox, class_name, confidence }] }`.
-- `GET /consumer/{stream_id}/frame`: latest processed JPEG snapshot (404 until a frame exists).
-- `GET /api/streams/{stream_id}/meta`: detection metadata (count / max confidence).
+- **Authentication**:
+  - `POST /api/auth/login`: verifies user credentials, returns JWT token.
+  - `POST /api/auth/register`: registers new user, returns JWT token.
+  - `GET /api/auth/me`: retrieves current authenticated user profile.
+- **Cameras (CRUD & Stats)**:
+  - `GET /api/cameras`: list cameras.
+  - `POST /api/cameras`: add a camera.
+  - `PUT /api/cameras/{camera_id}`: update camera.
+  - `DELETE /api/cameras/{camera_id}`: remove camera.
+  - `GET /api/stats`: system aggregated stats for the dashboard.
+- **Streams (Producer & Consumer)**:
+  - `WS /producer/{stream_id}`: producer ingest (**binary JPEG or PNG per message**). Runs the detection pipeline and broadcasts to consumers.
+  - `WS /consumer/{stream_id}`: consumer stream — for each processed frame the server sends **(1) binary** processed JPEG bytes, then **(2) text JSON** with `{ stream_id, frame_seq, tracks: [{ track_id, bbox, class_name, confidence }], yolo_latency_ms, person_latency_ms, action_latency_ms, pipeline_latency_ms }`.
+  - `GET /consumer/{stream_id}/frame`: latest processed JPEG snapshot (404 until a frame exists).
+  - `GET /api/streams/{stream_id}/meta`: active detection counts (weapon_count, confirmed_threat flag, etc.) stored in memory.
+
+## Pipeline & Model Customization
+- **Dual Model Inference**: Remaps class `person` (0) from the secondary COCO detector to class `Suspect` (2) to bolster suspect detection recall alongside the custom weapon detector. Bounding boxes are filtered using OpenCV DNN NMS.
+- **Temporal Action Classifier**: A 1D-CNN temporal action classifier loads weight parameters from `trained_model/temporal_action_weights.npz` (application fail-fast startup check if weights are missing) and operates on a 30-frame sequence window.
+- **Static Displacement Filter**: Static tracks with a displacement lower than 2% of the frame dimensions over the history window default to action class "Normal" (short-circuiting action classification to save CPU), EXCEPT when a weapon has been seen inside the temporal window history (weapon-aware override).
+
+## Pipeline Configuration & Tuning (bl/detection/config.py)
+The following configuration variables can be tweaked via environment variables:
+- `GUARDIAN_WEAPON_CONF_THRESHOLD` (default: `0.25`): minimum confidence for custom model detections.
+- `GUARDIAN_WEAPON_IOU_THRESHOLD` (default: `0.7`): IoU threshold for YOLO NMS.
+- `GUARDIAN_ENHANCE_DETECTION_INPUT` (default: `true`): applies CLAHE contrast adjustment and unsharp mask sharpening on the detector frame input only.
+- `GUARDIAN_ACTION_CONF_THRESHOLD` (default: `0.50`): minimum classification probability threshold required to override a track's status with an active threat label (Shooting/Violence).
+- `GUARDIAN_BBOX_SMOOTH_ALPHA` (default: `0.6`): Exponential Moving Average (EMA) factor for bbox coordinate smoothing (lower is smoother, higher is more responsive).
+- `GUARDIAN_WEAPON_GHOST_FRAMES` (default: `3`): number of missed-detection frames a weapon track remains alive.
+- `GUARDIAN_SUSPECT_GHOST_FRAMES` (default: `5`): number of missed-detection frames a suspect track remains alive.
+- `GUARDIAN_CONFIDENCE_DECAY` (default: `0.85`): score degradation multiplier applied per missed frame on ghost tracks.
 
 ## Producer / consumer contract
 - Producer: each WebSocket message is **one encoded image** (`jpeg`/`png` bytes). The backend decodes with `cv2.imdecode`, runs ONNX + ByteTrack, draws boxes, then broadcasts to all consumer sockets for that `stream_id`.
