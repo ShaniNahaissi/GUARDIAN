@@ -37,7 +37,7 @@ class TemporalFeatureExtractor:
         """Returns True if any weapon was detected within the recent temporal window.
         Used by the pipeline to make the static-displacement filter weapon-aware —
         a stationary person near a weapon should NOT be short-circuited to Normal."""
-        return len(self._weapon_history) > 0
+        return any(len(entry["weapons"]) > 0 for entry in self._weapon_history)
 
     def update_and_extract(
         self,

@@ -10,7 +10,7 @@
 - FastAPI + Uvicorn
 - ONNX Runtime (CPU or CUDA when available)
 - OpenCV + NumPy
-- `supervision` (ByteTrack)
+- `supervision` (ByteTrack): Trackers are tied to the producer's session and reset automatically on reconnect to prevent stale ghost tracks. The internal `lost_track_buffer` is kept synchronized with the custom ghost frame settings.
 
 ## Files
 - `backend/main.py`: full backend service.
