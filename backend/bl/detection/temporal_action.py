@@ -27,6 +27,7 @@ class TemporalFeatureExtractor:
         self.window_size = window_size
         # Dictionary mapping track_id -> list of raw track states: (bbox [x1, y1, x2, y2], confidence, timestamp)
         self.history: dict[int, list[dict[str, Any]]] = {}
+        self._last_seen: dict[int, int] = {}
         # Per-frame weapon positions, keyed by frame_seq so that historical feature extraction
         # can look up where weapons were at each past timestep instead of using only the current
         # frame's weapons for all 30 steps (which was the root cause of broken proximity features).
@@ -49,13 +50,19 @@ class TemporalFeatureExtractor:
         tids = {t["track_id"] for t in active_tracks}
         
         # Prune dead tracks from history
-        dead_ids = [tid for tid in self.history if tid not in tids]
+        current_seq = frame_seq
+        dead_ids = [
+            tid for tid, last in self._last_seen.items()
+            if tid not in tids and (current_seq - last) > self.window_size
+        ]
         for tid in dead_ids:
             self.history.pop(tid, None)
+            self._last_seen.pop(tid, None)
             
         # Update histories for active tracks
         for t in active_tracks:
             tid = t["track_id"]
+            self._last_seen[tid] = frame_seq
             self.history.setdefault(tid, []).append({
                 "bbox": t["bbox"],
                 "class_id": t["class_id"],

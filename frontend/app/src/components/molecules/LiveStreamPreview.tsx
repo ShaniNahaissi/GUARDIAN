@@ -73,16 +73,25 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
     const yOffset = (height - scaledHeight) / 2;
     
     const [x1, y1, x2, y2] = bbox;
-    const left = xOffset + x1 * scale;
-    const top = yOffset + y1 * scale;
-    const boxWidth = (x2 - x1) * scale;
-    const boxHeight = (y2 - y1) * scale;
+    const rawLeft = xOffset + x1 * scale;
+    const rawTop = yOffset + y1 * scale;
+    const rawRight = xOffset + x2 * scale;
+    const rawBottom = yOffset + y2 * scale;
+
+    const clampedLeft = Math.max(0, rawLeft);
+    const clampedTop = Math.max(0, rawTop);
+    const clampedRight = Math.min(width, rawRight);
+    const clampedBottom = Math.min(height, rawBottom);
+    const clampedWidth = clampedRight - clampedLeft;
+    const clampedHeight = clampedBottom - clampedTop;
+
+    if (clampedWidth <= 0 || clampedHeight <= 0) return { display: 'none' };
     
     return {
-      left: `${left}px`,
-      top: `${top}px`,
-      width: `${boxWidth}px`,
-      height: `${boxHeight}px`,
+      left: `${clampedLeft}px`,
+      top: `${clampedTop}px`,
+      width: `${clampedWidth}px`,
+      height: `${clampedHeight}px`,
       position: 'absolute',
       // Client-side interpolation: smooth bbox position/size transitions to further
       // reduce visual jitter on top of the backend's EMA-smoothed coordinates.
@@ -109,6 +118,7 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
 
     ws.onopen = () => {
       setStatus('live');
+      setLastMeta(null);
     };
 
     ws.onmessage = (ev: MessageEvent<Blob | string>) => {
@@ -135,6 +145,7 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
 
     ws.onerror = () => {
       setStatus('error');
+      setLastMeta(null);
     };
 
     ws.onclose = () => {

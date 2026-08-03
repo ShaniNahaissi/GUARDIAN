@@ -77,10 +77,11 @@ class StreamTrackSmoother:
         # lost_track_buffer raised from 30: how many frames a track survives with no matching
         # detection before it's dropped -- higher lets sparse/intermittent weapon detections still
         # bridge back to the same id instead of dying and needing to re-clear det_thresh again.
+        _LOST_TRACK_BUFFER = max(WEAPON_GHOST_FRAMES, SUSPECT_GHOST_FRAMES) + 2
         self.tracker = sv.ByteTrack(
             track_activation_threshold=max(0.0, WEAPON_CONF_THRESHOLD - 0.1),
             minimum_matching_threshold=0.3,
-            lost_track_buffer=60,
+            lost_track_buffer=_LOST_TRACK_BUFFER,
         )
         self.active_tracks: dict[int, TrackState] = {}
         self.lock = threading.Lock()
