@@ -26,9 +26,9 @@ DATE:        August 2026
 
 #### Executive Summary
 
-Real-time surveillance systems face a critical operational challenge: while modern security infrastructures generate massive volumes of continuous closed-circuit television (CCTV) video streams, traditional automated monitoring solutions rely heavily on static, single-frame heuristics that suffer from high false-positive rates and an inability to understand temporal context. This project introduces **GUARDIAN**, an end-to-end, real-time multi-modal threat and behavioral detection platform engineered for edge-assisted surveillance environments. GUARDIAN bridges the gap between spatial object detection and temporal action recognition by establishing a three-stage hierarchical inference pipeline: (1) high-speed spatial object detection using an edge-optimized YOLOv8 ONNX runtime to identify critical static threat indicators (**Gun**, **Knife**, and **Suspect**); (2) robust multi-object tracking via a custom zero-lag state machine wrapping **ByteTrack**, which preserves identity coherence across occlusions; and (3) sequence-level action recognition using a lightweight **1D Convolutional Neural Network (1D-CNN)** operating over a 30-frame temporal window of 12-dimensional geometric, kinetic, and weapon-proximity feature vectors.
+Real-time surveillance systems face a major practical challenge: while modern security setups generate massive amounts of continuous closed-circuit television (CCTV) video, traditional automated monitoring tools analyze frames individually. This lack of time-based context leads to frequent false alarms and limits their usefulness. This project introduces **GUARDIAN**, a real-time threat and behavioral detection platform designed for edge-assisted surveillance. GUARDIAN connects spatial object detection and temporal action recognition using a three-stage pipeline: (1) fast object detection using an edge-optimized YOLOv8 model in ONNX format to find threats in single frames (**Gun**, **Knife**, and **Suspect**); (2) stable multi-object tracking through a custom state machine based on **ByteTrack**, which keeps track of individuals even when they are temporarily blocked or hidden; and (3) sequence-level action recognition using a lightweight **1D Convolutional Neural Network (1D-CNN)** that analyzes 12-dimensional features (movement, position, and proximity to weapons) over a rolling 30-frame window.
 
-Our methodology integrates dataset unification across diverse real-world surveillance corpora (including Kaggle weapon datasets, Roboflow CCTV collections, and the **UCF-Crime** dataset) with specialized CCTV-realistic data augmentations (motion blur, digital sensor noise, perspective warp, and cutout occlusion). To achieve real-time execution without requiring heavy deep-learning frameworks on production edge servers, the trained PyTorch 1D-CNN weights are exported to a zero-dependency, vectorized NumPy inference engine. Experimental evaluations demonstrate that GUARDIAN achieves a single-frame mean Average Precision (mAP@0.5) of 89.4% on static weapon detection and an overall sequence-level F1-score of 88.7% on behavioral classification (**Normal**, **Shooting**, **Violence**). Furthermore, GUARDIAN maintains an end-to-end processing latency of under 22 ms per frame (>45 FPS) on standard edge hardware, significantly outperforming traditional recurrent architectures in both training convergence and low-latency inference while mitigating false alarms in dense surveillance scenes.
+Our approach combines data from different weapon and CCTV datasets (including Kaggle, Roboflow, and **UCF-Crime**) and applies realistic distortions like motion blur, camera noise, perspective warp, and partial blockages (cutouts) during training. To run the system in real time without heavy deep learning frameworks on edge servers, we exported the trained PyTorch 1D-CNN weights to a fast, zero-dependency NumPy inference engine. Testing shows that GUARDIAN reaches an 89.4% mean Average Precision (mAP@0.5) for weapon detection and an 88.7% F1-score for classifying behaviors (**Normal**, **Shooting**, **Violence**). The system processes video frames in under 22 ms (>45 frames per second) on standard edge hardware. This is faster and more stable than recurrent neural networks, while also reducing false alarms in crowded surveillance scenes.
 
 ---
 
@@ -49,12 +49,12 @@ Our methodology integrates dataset unification across diverse real-world surveil
    3.3. Algorithmic & Deep Learning Architecture (CRITICAL SECTION) ........................ 13  
    3.4. Evaluation Metrics .................................................................................................... 18  
 4. **Results and Analysis** ..................................................................................................... 20  
-   4.1. Experimental Setup .................................................................................................. 20  
+   4.1. Experimental Setup .................................----------------------------------------------------------------- 20  
    4.2. Presentation of Results ............................................................................................. 21  
    4.3. Data Analysis and Interpretation ............................................................................... 23  
    4.4. Comparison with Existing Approaches .................................................................... 24  
    4.5. Discussion of Findings ............................................................................................. 25  
-5. **Conclusion and Future Work** ....................................................................................... 26  
+5. **Conclusion and Future Work** .................................................................................------ 26  
 6. **References** ...................................................................................................................... 27  
 7. **Appendix A: Setup and Operational Instructions** ..................................................... 29  
 
@@ -107,62 +107,62 @@ Our methodology integrates dataset unification across diverse real-world surveil
 ### 1. Introduction
 
 #### 1.1. Background
-Modern security infrastructures are undergoing a structural transition from reactive forensics toward proactive, automated threat mitigation. While CCTV camera deployments have grown exponentially in public, corporate, and sensitive environments, the human ability to actively monitor dozens of concurrent visual feeds is fundamentally constrained by vigilance decrement and cognitive fatigue [1]. Over the past decade, Convolutional Neural Networks (CNNs) have revolutionized computer vision, enabling highly accurate object detection models capable of identifying spatial patterns in static frames [2]. However, true security threat assessment requires understanding not merely *what* objects are present in a scene, but *how* entities interact over time [3]. An individual holding a knife while cutting food represents a benign state, whereas rapid, aggressive motion with the same weapon toward another person represents an active armed assault. Consequently, modern surveillance analytics requires an integrated synthesis of spatial feature extraction, identity tracking across time, and sequential behavioral classification.
+Modern security systems are shifting from investigating past events to preventing threats in real time. Although CCTV cameras are now installed almost everywhere, security staff cannot watch all screens constantly due to tiredness and loss of focus [1]. Over the last decade, Convolutional Neural Networks (CNNs) have improved computer vision, making it possible to identify specific objects in single images [2]. However, true threat detection requires understanding not just *what* objects are in a scene, but *how* people behave and interact over time [3]. For example, a person holding a knife while preparing food is normal, but a person moving quickly and aggressively with a knife toward someone else is an active attack. Therefore, modern surveillance systems must combine object detection, multi-frame tracking, and temporal behavioral classification.
 
 #### 1.2. Problem Statement
-Existing automated video surveillance systems suffer from three major technical limitations that prevent their reliable deployment in real-world security operations:
-1. **The Spatial-Temporal Disconnect:** Traditional object detectors (e.g., standard YOLO or Faster R-CNN pipelines) operate on isolated frames. They cannot distinguish between stationary, benign objects and dynamic violent actions, leading to alarm fatigue from excessive false positives [4].
-2. **Computational and Latency Bottlenecks at the Edge:** Video action recognition architectures such as 3D-CNNs (e.g., C3D, I3D) and Two-Stream Optical Flow networks impose immense computational and VRAM demands [5]. Deploying these heavy models on edge servers or local security hardware results in unacceptable inference latencies (>100 ms/frame), rendering real-time intervention impossible.
-3. **CCTV Domain Degradation and Weapon Ghosting:** Low-cost surveillance cameras suffer from motion blur, low lighting, compression artifacts, and digital noise. In dynamic scenes, traditional tracking filters fail during rapid suspect movement or occlusion, causing dropped bounding boxes ("weapon ghosting") and breaking the continuity required for sequence analysis [6].
+Current automated video surveillance systems face three major technical challenges that limit their use in real-world environments:
+1. **The Spatial-Temporal Disconnect:** Traditional detectors analyze frames separately. They cannot distinguish between stationary, harmless objects and violent actions, which leads to too many false alarms [4].
+2. **High Computational Demands at the Edge:** Video action recognition models like 3D-CNNs and Two-Stream networks require huge amounts of memory and processor power [5]. Running these models on local edge servers makes them too slow (>100 ms per frame), preventing real-time alerts.
+3. **CCTV Quality Loss and Lost Weapon Boxes:** Low-cost security cameras often produce blurry or noisy videos with compression artifacts. Standard tracking algorithms fail when suspects move quickly or get blocked by objects, causing the system to lose track of weapons and miss critical threat sequences [6].
 
 #### 1.3. Objectives
-The primary objective of this undergraduate thesis project is to research, design, implement, and rigorously evaluate **GUARDIAN**, an edge-optimized real-time video analytics platform. Specifically, the project achieves the following measurable goals:
-* **Develop a Unified Spatial Threat Detector:** Fine-tune and export an optimized YOLOv8 ONNX model trained on a curated, domain-unified dataset of weapons (**Gun**, **Knife**) and human entities (**Suspect**), achieving mAP@0.5 > 85% under CCTV degradation.
-* **Implement Zero-Lag Identity Tracking:** Design an enhanced tracking state machine over **ByteTrack** [7] that eliminates bounding box flicker and maintains persistent identity trajectories (MOTA > 80%) during complex multi-person interactions.
-* **Engineer a Lightweight Temporal Action Classifier:** Formulate a 12-dimensional spatial-kinetic-proximity feature representation over a 30-frame temporal window and train a **1D-CNN** sequence classifier capable of differentiating **Normal**, **Shooting**, and **Violence** behaviors with F1-score > 85%.
-* **Achieve Edge-Ready Real-Time Processing:** Implement a zero-dependency NumPy inference runtime for temporal classification that, combined with ONNX Runtime, executes the end-to-end pipeline in under 25 ms per frame (>40 FPS) on standard consumer-grade GPU/CPU hardware.
+The main goal of this project is to develop and evaluate **GUARDIAN**, an edge-optimized real-time video analytics platform. Specifically, the project achieves the following milestones:
+* **Develop a Spatial Threat Detector:** Train and export an optimized YOLOv8 ONNX model using a unified dataset of weapons (**Gun**, **Knife**) and human entities (**Suspect**), reaching mAP@0.5 > 85% on noisy surveillance feeds.
+* **Implement Zero-Lag Tracking:** Build an enhanced tracking state machine on top of **ByteTrack** [7] that prevents bounding box flicker and maintains constant track paths (MOTA > 80%) during multi-person interactions.
+* **Design a Lightweight Temporal Action Classifier:** Create a 12-dimensional feature vector (coordinates, velocities, and weapon proximity) and train a **1D-CNN** to classify sequences of **Normal**, **Shooting**, and **Violence** with F1-score > 85% over a 30-frame window.
+* **Achieve Real-Time Execution:** Implement a zero-dependency NumPy inference engine that, together with ONNX Runtime, runs the entire pipeline in under 25 ms per frame (>40 FPS) on standard edge hardware.
 
 #### 1.4. Scope and Limitations
-* **Scope:** GUARDIAN focuses on real-time visual threat detection from indoor and outdoor fixed CCTV video streams. The software architecture covers live RTSP/WebSocket stream ingestion, backend FastAPI inference orchestration, persistent PostgreSQL camera and alert storage, and a modern React 19/Tailwind v4 web dashboard.
-* **Limitations:** The temporal action classifier is trained to recognize three primary operational states (**Normal**, **Shooting**, and **Violence**). Extremely crowded scenes (e.g., stadiums with >100 overlapping individuals per frame) exceed the maximum tracking capacity of the current real-time ByteTrack configuration without hardware scaling. Audio modal analytics and multi-camera re-identification across disjoint physical rooms remain outside the scope of this project.
+* **Scope:** GUARDIAN focuses on real-time threat detection from fixed CCTV cameras. The system includes stream ingestion, backend FastAPI inference, PostgreSQL storage for cameras and alerts, and a web dashboard built with React 19 and Tailwind v4.
+* **Limitations:** The temporal action classifier recognizes three main states (**Normal**, **Shooting**, and **Violence**). Extremely crowded locations (with >100 overlapping people per frame) exceed the capacity of the edge tracking system. Audio analysis and tracking people across different rooms are not covered in this project.
 
 #### 1.5. Methodology
-The project methodology follows an iterative, hypothesis-driven engineering pipeline:
-1. **Data Harmonization and CCTV Augmentation:** Raw annotations from Kaggle and Roboflow weapon datasets were standardized into a unified two-class threat schema (**0: Gun**, **1: Knife**), while real-world surveillance videos from the **UCF-Crime** dataset were processed to extract 30-frame bounding-box coordinate sequences for temporal action training. CCTV-realistic augmentations (motion blur, Gaussian noise, perspective distortion, and random cutout occlusions) were applied during training.
-2. **Algorithmic Prototyping and Model Selection:** We systematically compared recurrent architectures (Gated Recurrent Units, LSTMs) against 1D Convolutional Neural Networks for temporal sequence modeling. The 1D-CNN architecture was selected due to its superior gradient flow, complete sequence parallelism, and deterministic mathematical reproducibility in zero-dependency runtime environments.
-3. **End-to-End Implementation:** A decoupled producer-consumer WebSocket server architecture was built using FastAPI and Python 3.11, while the frontend dashboard was developed in TypeScript and React 19 to render low-latency SVG overlay detections dynamically.
-4. **Empirical Benchmarking:** The integrated system was benchmarked across single-frame spatial accuracy, sequence classification precision/recall, and end-to-end hardware latency across varying stream resolutions.
+The project methodology follows an iterative development and testing process:
+1. **Data Harmonization and CCTV Augmentation:** We combined annotations from weapon datasets into a clean two-class schema (**0: Gun**, **1: Knife**) and processed videos from the **UCF-Crime** dataset to extract 30-frame tracking coordinates. Realistic distortions (motion blur, sensor noise, perspective warp, and cutout blocks) were applied during training to make the models robust.
+2. **Model Selection:** We compared recurrent networks (GRUs and LSTMs) against 1D-CNNs for sequence modeling. The 1D-CNN was chosen because it trains much faster and can be written as simple math equations using NumPy for fast execution.
+3. **Full-Stack Implementation:** A decoupled WebSocket server was built using FastAPI and Python 3.11, while the frontend dashboard was developed in TypeScript and React 19 to render low-latency overlays on top of the live video stream.
+4. **Empirical Benchmarking:** The final system was tested for spatial accuracy, sequence classification precision/recall, and end-to-end processing speed.
 
 #### 1.6. Organization of the Project Book
-* **Chapter 1: Introduction** defines the operational context, research motivation, technical challenges, and measurable goals of the GUARDIAN platform.
-* **Chapter 2: Literature Review** critically examines foundational deep learning computer vision algorithms, multi-object tracking frameworks, temporal action recognition paradigms, and relevant academic benchmarks.
-* **Chapter 3: System Design and Implementation** provides an exhaustive architectural breakdown of GUARDIAN, detailing the full-stack software integration, database schema, mathematical formulations of the 30-frame 1D-CNN and tracking state machine, and formal evaluation metrics.
-* **Chapter 4: Results and Analysis** presents comprehensive experimental results, ablation studies, confusion matrices, latency histograms, and comparative benchmarks against baseline literature approaches.
-* **Chapter 5: Conclusion and Future Work** summarizes project milestones, reflects on empirical findings, and proposes concrete avenues for future academic research.
-* **Chapter 6: References** lists all cited academic papers and technical specifications in standard IEEE format.
-* **Appendix A** provides step-by-step setup, Docker deployment, and developer run instructions for reproducing the project.
+* **Chapter 1: Introduction** defines the operational context, problem statement, and goals of the GUARDIAN system.
+* **Chapter 2: Literature Review** examines existing computer vision models, tracking frameworks, and temporal action recognition methods.
+* **Chapter 3: System Design and Implementation** provides the system architecture, database design, mathematical formulations of the 1D-CNN and tracker, and evaluation metrics.
+* **Chapter 4: Results and Analysis** presents the experimental findings, model comparisons, confusion matrices, and latency measurements.
+* **Chapter 5: Conclusion and Future Work** summarizes the achievements and suggests paths for future research.
+* **Chapter 6: References** lists academic publications cited throughout the project book.
+* **Appendix A** contains setup, configuration, and run instructions.
 
 ---
 
 ### 2. Literature Review
 
 #### 2.1. Overview of Relevant Literature
-The evolution of automated surveillance analytics has been propelled by successive breakthroughs in deep neural network architectures, moving from hand-crafted feature extractors to end-to-end differentiable spatio-temporal models.
+Automated surveillance has improved significantly due to advances in deep neural networks, moving from manual feature design to automated spatial and temporal modeling.
 
 ##### 2.1.1. Spatial Object Detection: From Two-Stage to One-Stage Detectors
-Early deep learning object detectors relied on two-stage region-proposal architectures such as Faster R-CNN [8], which generated candidate regions before classifying bounding boxes. While highly accurate, two-stage detectors impose computational overheads that preclude real-time multi-stream CCTV inference. The introduction of single-stage YOLO (You Only Look Once) architectures [9] reframed object detection as a unified regression problem across spatial grid cells. Subsequent iterations, culminating in **YOLOv8** [10], introduced anchor-free detection heads, task-aligned assigners, and CIoU (Complete Intersection over Union) bounding box regression losses. Studies by Bochkovskiy et al. [11] demonstrate that YOLO-based architectures provide the optimal Pareto efficiency between mean Average Precision (mAP) and inference velocity on edge hardware, making YOLOv8 the ideal backbone for spatial threat localization in GUARDIAN.
+Early deep learning detectors used two-stage networks like Faster R-CNN [8] that proposed regions before classifying them. While accurate, they are too slow for real-time monitoring on several CCTV streams. Single-stage YOLO (You Only Look Once) networks [9] solved this by treating object detection as a single regression problem. The latest iteration, **YOLOv8** [10], includes anchor-free detection heads and optimized loss functions. Studies show that YOLOv8 provides the best balance between accuracy and inference speed on edge hardware [11], making it the ideal choice for spatial detection in GUARDIAN.
 
 ##### 2.1.2. Tracking by Detection: ByteTrack and Identity Persistence
-In dynamic surveillance streams, detecting an object in isolated frames is insufficient; the system must maintain consistent temporal trajectories. Traditional multi-object tracking (MOT) frameworks, such as SORT [12] and DeepSORT [13], utilize Kalman filters and linear assignment (the Hungarian algorithm) to associate detections across frames. However, standard SORT algorithms discard low-confidence detections caused by motion blur or partial occlusion, resulting in frequent track fragmentation and identity switching (IDSW). Zhang et al. proposed **ByteTrack** [7], which revolutionizes tracking by associating *every* detection box—both high-confidence and low-confidence—through a two-step hierarchical matching strategy. By leveraging background temporal smoothness, ByteTrack recovers occluded weapons and rapidly moving suspects without requiring computationally expensive Re-Identification (ReID) embedding neural networks.
+In real video streams, identifying objects in single frames is not enough; the system must follow them over time. Traditional multi-object tracking (MOT) systems like SORT [12] and DeepSORT [13] use Kalman filters and spatial overlap (IoU) to connect boxes. However, they discard low-confidence detections caused by blur or temporary blocks, resulting in frequent track loss and ID changes. **ByteTrack** [7] solves this by matching *every* box—both high and low confidence—using a two-step matching strategy. This allows the system to follow blurry weapons and fast-moving suspects without needing heavy neural networks.
 
 ##### 2.1.3. Sequential Behavioral Analytics: RNNs, 3D-CNNs, and 1D-CNNs
-To recognize complex human behaviors over time, computer vision researchers have explored several competing sequence-modeling paradigms:
-* **3D Convolutional Neural Networks (3D-CNNs):** Architectures like C3D [14] and I3D [5] extend standard 2D spatial kernels across the time axis, convolving directly over video volumes (T x H x W x C). While mathematically expressive, 3D-CNNs require processing high-dimensional raw pixel volumes, demanding hundreds of gigaflops per inference and incurring prohibitive latency on edge servers.
-* **Recurrent Neural Networks (RNNs/LSTMs/GRUs):** Long Short-Term Memory (LSTM) and Gated Recurrent Unit (GRU) networks process sequence features step-by-step [3]. However, recurrent architectures suffer from Backpropagation Through Time (BPTT) sequential bottlenecks during training, sensitive gating hyperparameters, and vanishing/exploding gradient dynamics when analyzing long sequences [15].
-* **Temporal 1D Convolutional Neural Networks (1D-CNNs):** Recent literature by Bai et al. [15] demonstrates that Temporal 1D Convolutional Networks—operating over structured, low-dimensional coordinate and kinetic feature vectors—match or outperform recurrent architectures across sequence classification benchmarks. By applying 1D convolutions across the time dimension (T), 1D-CNNs achieve complete parallelization during training, exhibit smooth loss landscapes, and can be compiled into compact linear matrix operations for rapid inference.
+Researchers have explored three main ways to recognize actions in video sequences:
+* **3D Convolutional Neural Networks (3D-CNNs):** Models like C3D [14] and I3D [5] apply 3D filters directly to video volumes over time. Although accurate, convolving raw video frames is extremely slow and requires expensive GPUs.
+* **Recurrent Neural Networks (RNNs/LSTMs/GRUs):** LSTM and GRU networks process features frame-by-frame [3]. However, they are slow to train, suffer from gradient problems, and can be unstable when analyzing longer sequences [15].
+* **Temporal 1D Convolutional Neural Networks (1D-CNNs):** Recent studies [15] show that 1D-CNNs convolving over low-dimensional coordinate and kinetic vectors match the accuracy of recurrent networks. They train faster because they process sequences in parallel, and their calculations can be run using simple matrix algebra.
 
 ##### 2.1.4. Surveillance Anomaly Datasets and Benchmarks
-Training robust behavioral models requires diverse real-world anomaly data. Sultani et al. [4] introduced the **UCF-Crime** dataset, a large-scale collection of untrimmed surveillance videos covering 13 real-world anomaly classes, including armed robbery, shooting, assault, and abuse. Unlike staged laboratory datasets, UCF-Crime captures authentic CCTV visual artifacts, variable camera angles, and unscripted violent dynamics. By synthesizing spatial weapon annotations from Roboflow/Kaggle corpora with sequence-level behavioral trajectories from UCF-Crime, GUARDIAN establishes a comprehensive, multi-modal training and evaluation methodology that directly addresses the limitations identified in contemporary literature.
+Training models requires realistic data. The **UCF-Crime** dataset [4] is a large-scale collection of real surveillance videos covering anomalies like robberies, shootings, and assaults. It contains real CCTV visual artifacts, different camera angles, and unscripted violent dynamics. By combining weapon datasets with sequences from UCF-Crime, GUARDIAN creates a realistic training framework.
 
 ```
 +---------------------------------------------------------------------------------------+
@@ -183,7 +183,7 @@ Training robust behavioral models requires diverse real-world anomaly data. Sult
 ### 3. System Design and Implementation
 
 #### 3.1. System Architecture
-GUARDIAN is engineered as an asynchronous, distributed real-time video analytics platform. To ensure high throughput and zero UI thread blocking, the architecture cleanly decouples stream ingestion, deep learning inference, stateful tracking, temporal classification, database persistence, and client visualization.
+GUARDIAN is built as an asynchronous system. To keep the user interface smooth, the architecture separates video ingestion, neural network inference, object tracking, action classification, database logging, and web visualization.
 
 ```
 Figure 3.1: GUARDIAN End-to-End System Architecture Diagram
@@ -228,32 +228,32 @@ Figure 3.1: GUARDIAN End-to-End System Architecture Diagram
 ```
 
 ##### 3.1.1. Full-Stack Layer Responsibilities
-* **UI Layer (Frontend):** Developed using Vite, React 19, TypeScript, and Tailwind CSS v4. The frontend implements a single-page view state machine (`dashboard`, `camera`, `settings`, `add-camera`, `edit-camera`, `camera-stream`). It maintains dynamic stream previews (`LiveStreamPreview.tsx`) and full-screen surveillance views (`CameraView.tsx`). To maximize streaming framerates, the frontend offloads all bounding box and threat alert visualizations from the Python backend; raw frames and JSON track metadata are rendered client-side using responsive HTML/SVG overlays synchronized via `ResizeObserver`.
-* **API Layer (Backend REST):** Implemented using FastAPI under the `/api/*` prefix. It exposes secure endpoints for camera CRUD operations (`GET/POST/PUT/DELETE /api/cameras`), system health monitoring (`/health`), and real-time system metrics (`/api/stats`), protected by Role-Based Access Control (RBAC) middleware.
-* **Streaming & Ingest Layer (FastAPI WebSockets):** Live streams bypass HTTP REST overhead by communicating directly via root-level WebSocket protocols:
-  * `WS /producer/{stream_id}`: Receives raw binary JPEG/PNG frames from camera edge nodes or E2E synthetic producers.
-  * `WS /consumer/{stream_id}`: Broadcasts processed binary JPEG images followed immediately by structured JSON track and threat metadata (`StreamTrackPayload`) to connected dashboard clients.
-  * `GET /consumer/{stream_id}/frame`: Exposes a lightweight snapshot endpoint for low-bandwidth polling fallbacks.
-* **Inference & Algorithmic Layer:** Implements the core artificial intelligence engine. Frames are decoded via OpenCV (`imdecode`) and passed into an ONNX Runtime session executing the fine-tuned YOLOv8 model. Detections are piped into a custom tracking state machine (`tracker.py`) wrapping `supervision.ByteTrack`. Track trajectories are compiled into 30-frame historical buffers (`temporal_action.py`) and evaluated by a vectorized NumPy 1D-CNN temporal classifier to predict active behavioral states.
-* **Deployment & Proxy Layer:** Containerized via multi-stage Docker builds (`Dockerfile`, `docker-compose.yml`). An Nginx reverse proxy serves compiled React static assets while proxying API (`/api`), WebSocket (`/producer`, `/consumer`), and health endpoints to the TLS-enabled Uvicorn backend (`https://127.0.0.1:8000`). A real-time Dozzle container running on port `9999` provides visual system and latency telemetry.
+* **UI Layer (Frontend):** Developed in React 19, TypeScript, and Tailwind CSS v4. The UI manages the view state (`dashboard`, `camera`, `settings`, `add-camera`, `edit-camera`, `camera-stream`). Live streams are shown using dynamic previews (`LiveStreamPreview.tsx`) and full views (`CameraView.tsx`). To keep performance high, bounding boxes and warnings are drawn on the client using responsive SVG overlays.
+* **API Layer (Backend REST):** A FastAPI app that provides camera CRUD operations (`GET/POST/PUT/DELETE /api/cameras`), health checks (`/health`), and system stats (`/api/stats`) secured with role permissions.
+* **Streaming Layer (FastAPI WebSockets):** Low-latency communication uses standard WebSocket protocols:
+  * `WS /producer/{stream_id}`: Receives raw binary frames from the video producer.
+  * `WS /consumer/{stream_id}`: Broadcasts processed frames followed by JSON metadata to dashboards.
+  * `GET /consumer/{stream_id}/frame`: Snapshot fallback for low-bandwidth environments.
+* **Inference Layer:** Frames are decoded, run through the YOLOv8 model via ONNX Runtime, smoothed with a tracking state machine (`tracker.py`), compiled into 30-frame buffers (`temporal_action.py`), and classified by the NumPy 1D-CNN.
+* **Deployment & Proxy:** Containerized with Docker. Nginx serves the compiled frontend and proxies API, WebSocket, and health requests to the FastAPI backend. Dozzle runs on port `9999` to display real-time logs and system performance.
 
 ---
 
 #### 3.2. Data & Database Architecture
 
-##### 3.2.1. Curated Datasets and Data Harmonization
-GUARDIAN combines two primary data domains to achieve spatial threat localization and temporal behavioral recognition:
-1. **Unified Spatial Threat Dataset:** We aggregated multi-class surveillance datasets from Kaggle (`kaggle_weapon`), Roboflow (`roboflow_guns`), and CCTV suspicious movement collections. Using our automated **Dataset Unification Engine** (documented in `trained_model/POC.ipynb`), redundant and non-threat labels (e.g., *smartphone*, *wallet*, *victim*, *card*) were systematically filtered out and re-mapped into a clean, two-class weapon taxonomy:
-   * **Class 0 (`Gun`):** Mapped from pistol, firearm, and rifle annotations.
-   * **Class 1 (`Knife`):** Mapped from edged weapons and bladed tools.
-   * **Class 2 (`Suspect`):** Automatically tracked human entity bounding boxes in the scene.
-2. **Temporal Anomaly Action Dataset (UCF-Crime):** To train sequence classification without synthetic bias, we utilized the **UCF-Crime** dataset (`temporal_training/`). Real-world video sequences of armed robbery, assaults, and normal public scenes were processed through our spatial detector and tracking pipeline (`dataset_builder.py`). For every tracked individual over time T = 30, a 12-dimensional spatio-temporal vector was extracted, creating an annotated sequence corpus balanced across three behavioral classes:
-   * **Class 0 (`Normal`):** Benign walking, standing, or public interactions.
-   * **Class 1 (`Shooting`):** Kinetic firing stance, rapid recoil, or active firearm brandishing.
-   * **Class 2 (`Violence`):** Physical assault, rapid interpersonal closing velocity, or stabbing kinematics.
+##### 3.2.1. Datasets and Data Harmonization
+GUARDIAN combines two primary data sources:
+1. **Spatial Threat Dataset:** We merged weapon datasets from Kaggle and Roboflow and filtered out unrelated labels, mapping them to:
+   * **Class 0 (`Gun`):** Pistols, firearms, and rifles.
+   * **Class 1 (`Knife`):** Edged weapons and knives.
+   * **Class 2 (`Suspect`):** Tracked human bounding boxes.
+2. **Temporal Action Dataset (UCF-Crime):** Video sequences of armed robbery, assault, and normal behavior were processed through our tracking pipeline to extract 12-dimensional vectors for each person over 30 frames. The dataset contains:
+   * **Class 0 (`Normal`):** Benign public behavior.
+   * **Class 1 (`Shooting`):** Shooting stances and firearm recoil.
+   * **Class 2 (`Violence`):** Fighting, pushing, and aggressive movement.
 
-##### 3.2.2. Relational Database Schema and Entity Relationships
-To support persistent camera configurations, historical event logging, and system health metrics, GUARDIAN implements an asynchronous PostgreSQL relational database layer governed by SQLAlchemy (`models/camera.py`, `models/user.py`).
+##### 3.2.2. Relational Database Schema
+To support persistent camera setups, threat logs, and system metrics, GUARDIAN uses PostgreSQL with SQLAlchemy.
 
 ```
 Figure 3.2: PostgreSQL Database Schema and Entity-Relationship Diagram
@@ -306,7 +306,7 @@ Figure 3.2: PostgreSQL Database Schema and Entity-Relationship Diagram
 
 #### 3.3. Algorithmic & Deep Learning Architecture (CRITICAL SECTION)
 
-GUARDIAN operates through a tightly coupled, three-stage algorithmic progression: spatial feature localization -> temporal identity tracking -> sequence-level action recognition.
+GUARDIAN processes video frames in three connected stages: spatial threat detection -> temporal tracking -> sequence classification.
 
 ```
 Figure 3.3: Three-Stage Hierarchical Detection, Tracking, and Temporal Action Pipeline
@@ -347,13 +347,13 @@ Figure 3.3: Three-Stage Hierarchical Detection, Tracking, and Temporal Action Pi
 ```
 
 ##### 3.3.1. Stage 1: Spatial Threat Detection via YOLOv8 ONNX Engine
-To achieve sub-10ms spatial detection on edge hardware, GUARDIAN implements `YoloOnnxDetector` (`yolo.py`), which executes standard YOLOv8 models exported to the Open Neural Network Exchange (`guardian_backend_model.onnx`).
-* **Input Normalization:** Incoming BGR video frames are resized to 640x640, converted to RGB, normalized to the range [0.0, 1.0], and transposed to planar tensor memory order (1 x 3 x 640 x 640).
-* **Tensor Post-Processing & Architectural Mismatch Correction:** Unlike older YOLOv5 architectures that output an explicit "objectness" score at index 4, YOLOv8 anchor-free prediction heads directly output class probabilities starting at tensor index 4. For an input image of 640 x 640, the output tensor has shape (1, 6, 8400), where 6 corresponds to 4 bounding box coordinates (cx, cy, w, h) plus 2 target class scores (`Gun`, `Knife`).
-* **Coordinate Transformation:** Bounding box centroids are decoded into absolute image pixel coordinates via scale factors:
+To keep latency under 10ms on edge hardware, the spatial detector (`yolo.py`) runs the YOLOv8 model in ONNX format:
+* **Input Normalization:** BGR video frames are resized to 640x640, converted to RGB, normalized to the range [0.0, 1.0], and formatted as a float32 tensor (1 x 3 x 640 x 640).
+* **Output Parsing:** YOLOv8 outputs class probabilities starting directly at tensor index 4. The output tensor has shape (1, 6, 8400), containing 4 coordinates (cx, cy, w, h) and 2 class scores (`Gun` and `Knife`).
+* **Coordinate Conversion:** Central coordinates are converted to pixel locations:
   x1 = (cx - 0.5*w) * scale_x,   y1 = (cy - 0.5*h) * scale_y
   x2 = (cx + 0.5*w) * scale_x,   y2 = (cy + 0.5*h) * scale_y
-* **Non-Maximum Suppression (NMS):** To remove redundant overlapping bounding boxes, NMS is applied with an Intersection over Union (IoU) threshold of 0.45 and a confidence threshold of 0.35.
+* **Non-Maximum Suppression (NMS):** Overlapping boxes are removed using NMS with an IoU threshold of 0.45 and confidence threshold of 0.35.
 
 ```python
 # Code Snippet 3.1: YOLOv8 ONNX Post-Processing & NMS Decoding (yolo.py)
@@ -379,11 +379,11 @@ indices = cv2.dnn.NMSBoxes(boxes, scores, self.conf_threshold, self.iou_threshol
 ```
 
 ##### 3.3.2. Stage 2: Zero-Lag Tracking State Machine (ByteTrack)
-Raw detection boxes exhibit inter-frame jitter and dropouts during sudden camera motion. GUARDIAN addresses this by wrapping `supervision.ByteTrack` in a custom tracking state machine (`bl/detection/tracker.py`).
-* **Hierarchical Association:** ByteTrack partitions detections into high-confidence and low-confidence sets. High-confidence boxes are matched to existing Kalman filter track predictions via Hungarian optimization over IoU distance. Unmatched tracks are subsequently evaluated against low-confidence detections, successfully recovering blurred weapons held by moving suspects.
-* **Zero-Lag Bounding Box Smoothing:** Standard trackers delay track initialization until a box is observed across N consecutive frames, causing a visible lag in security dashboards. GUARDIAN eliminates this by instantly displaying any new detection with confidence > 0.55, while applying exponential moving average (EMA) coordinate smoothing (alpha = 0.70) to prevent jitter:
+Raw detection boxes can jitter or drop during fast camera movements. GUARDIAN wraps `supervision.ByteTrack` in a tracking state machine (`tracker.py`):
+* **Hierarchical Matching:** Detections are split into high and low confidence groups. High confidence boxes are matched first using Kalman filter predictions and IoU distance. Unmatched tracks are then matched with low confidence boxes, recovering blurred or occluded weapons.
+* **Instant Bounding Box Smoothing:** Traditional trackers wait for a box to appear across multiple frames before starting a track, causing a lag in the UI. GUARDIAN displays new tracks immediately if confidence is > 0.55, and applies exponential moving average (EMA) coordinate smoothing (alpha = 0.70) to prevent coordinate jitter:
   b_smooth(t) = alpha * b_raw(t) + (1 - alpha) * b_smooth(t-1)
-* **Zero Weapon Ghosting:** If a tracked weapon temporarily drops below detection thresholds due to hand occlusion, the state machine retains its historical bounding box for up to 30 frames, flagging it as a persistent threat state.
+* **Ghost Weapon Retention:** If a weapon is temporarily blocked or drops out, the system keeps its bounding box active for up to 30 frames to maintain a stable threat status.
 
 ```python
 # Code Snippet 3.2: Zero-Lag Bounding Box EMA Smoothing (tracker.py)
@@ -400,17 +400,18 @@ def smooth_box(self, track_id: int, raw_box: list[int], alpha: float = 0.70) -> 
     return smoothed
 ```
 
-##### 3.3.3. Stage 3: Temporal Feature Extraction and Weapon-Proximity Geometry
-To classify sequence behaviors over time, `TemporalFeatureExtractor` (`temporal_action.py`) maintains a rolling temporal buffer of size T = 30 frames for every tracked suspect. At each frame t, a **12-dimensional feature vector** f(t) is compiled:
-1. **Normalized Bounding Box Coordinates (4 features):** Corner coordinates scaled by image dimensions W, H:
+##### 3.3.3. Stage 3: Temporal Feature Extraction
+To classify behaviors, `TemporalFeatureExtractor` (`temporal_action.py`) maintains a rolling 30-frame history for each person. At each frame, it compiles a **12-dimensional feature vector**:
+1. **Normalized Coordinates (4 features):** Bounding box corners scaled by image width and height:
    f1, f2, f3, f4 = x1/W, y1/H, x2/W, y2/H
-2. **Bounding Box Kinematic Velocity (4 features):** First-order temporal differences indicating motion speed and direction:
+2. **Kinematic Velocity (4 features):** First-order differences representing speed and direction of movement:
    f5, f6, f7, f8 = dx1, dy1, dx2, dy2 = (x1(t) - x1(t-1))/W, ...
-3. **Detection Confidence (1 feature):** Spatial detector confidence score f9 = conf(t).
-4. **Historical Per-Frame Weapon Proximity (2 features):** To prevent false proximity calculations where a suspect is incorrectly associated with a weapon from a different timestamp, GUARDIAN stores weapon coordinates *per historical frame sequence*. For a suspect centroid and weapon centroid, the Euclidean distance and Intersection over Union are calculated as:
-   f10 = min distance to weapon in frame t,    f12 = weapon-suspect bbox overlap indicator (0.0 or 1.0)
-5. **Inter-Suspect Proximity (1 feature):** Euclidean distance to the nearest secondary suspect centroid:
-   f11 = min distance to nearest other suspect in frame t
+3. **Detection Confidence (1 feature):** The confidence score of the spatial detector:
+   f9 = conf(t)
+4. **Historical Weapon Proximity (2 features):** Weapon positions are saved *per historical frame*. We calculate:
+   f10 = minimum distance to a weapon in frame t,    f12 = binary overlap indicator (1.0 if suspect and weapon boxes overlap, 0.0 otherwise)
+5. **Inter-Suspect Proximity (1 feature):** Distance to the nearest other suspect:
+   f11 = minimum distance to another suspect in frame t
 
 ```
 Figure 3.4: 12-Dimensional Temporal Feature Extraction and Weapon-Proximity Geometry
@@ -437,46 +438,46 @@ Figure 3.4: 12-Dimensional Temporal Feature Extraction and Weapon-Proximity Geom
     Feature Vector f(t) = [nx1,ny1,nx2,ny2, dx1,dy1,dx2,dy2, conf, f10, f11, f12]
 ```
 
-##### 3.3.4. The 1D-CNN Temporal Action Classifier (Why 1D-CNN over GRU?)
-To classify the sequence matrix X (30 x 12) into behavioral classes (**0: Normal**, **1: Shooting**, **2: Violence**), GUARDIAN implements a 1D Convolutional Neural Network (`TemporalCNNClassifier` in `temporal_training/model.py`, mirrored by `NumPyCNNClassifier` in `temporal_action.py`).
+##### 3.3.4. The 1D-CNN Temporal Action Classifier
+To classify the 30 x 12 feature matrix into behavioral states (**Normal**, **Shooting**, **Violence**), GUARDIAN runs a 1D Convolutional Neural Network written in NumPy (`NumPyCNNClassifier` in `temporal_action.py`).
 
 ```
 Figure 3.5: 1D-CNN Temporal Action Classifier Neural Network Architecture
 
-  Input Sequence X (30 Timesteps x 12 Features)
-  [t=0, t=1, ..., t=29]  ===> Transpose ===> Shape: (Channels=12, Length=30)
-                                                    ||
-                                                    \/
-  +---------------------------------------------------------------------------------+
-  | LAYER 1: Conv1D (in_channels=12, out_channels=32, kernel_size=5, padding=2)     |
-  | Activation: ReLU                                                                |
-  +---------------------------------------------------------------------------------+
-                                                    ||  Shape: (Channels=32, Length=30)
-                                                    \/
-  +---------------------------------------------------------------------------------+
-  | LAYER 2: Conv1D (in_channels=32, out_channels=32, kernel_size=5, padding=2)     |
-  | Activation: ReLU                                                                |
-  +---------------------------------------------------------------------------------+
-                                                    ||  Shape: (Channels=32, Length=30)
-                                                    \/
-  +---------------------------------------------------------------------------------+
-  | GLOBAL AVERAGE POOLING OVER TIME (mean across axis=1)                           |
-  +---------------------------------------------------------------------------------+
-                                                    ||  Shape: (Hidden=32,)
-                                                    \/
-  +---------------------------------------------------------------------------------+
-  | CLASSIFIER HEAD: Fully Connected Linear (in_features=32, out_features=3)        |
-  | Activation: Stable Softmax Prohibitions                                         |
-  +---------------------------------------------------------------------------------+
-                                                    ||
-                                                    \/
-  Output Probability Distribution: [P(Normal), P(Shooting), P(Violence)]
+   Input Sequence X (30 Timesteps x 12 Features)
+   [t=0, t=1, ..., t=29]  ===> Transpose ===> Shape: (Channels=12, Length=30)
+                                                     ||
+                                                     \/
+   +---------------------------------------------------------------------------------+
+   | LAYER 1: Conv1D (in_channels=12, out_channels=32, kernel_size=5, padding=2)     |
+   | Activation: ReLU                                                                |
+   +---------------------------------------------------------------------------------+
+                                                     ||  Shape: (Channels=32, Length=30)
+                                                     \/
+   +---------------------------------------------------------------------------------+
+   | LAYER 2: Conv1D (in_channels=32, out_channels=32, kernel_size=5, padding=2)     |
+   | Activation: ReLU                                                                |
+   +---------------------------------------------------------------------------------+
+                                                     ||  Shape: (Channels=32, Length=30)
+                                                     \/
+   +---------------------------------------------------------------------------------+
+   | GLOBAL AVERAGE POOLING OVER TIME (mean across axis=1)                           |
+   +---------------------------------------------------------------------------------+
+                                                     ||  Shape: (Hidden=32,)
+                                                     \/
+   +---------------------------------------------------------------------------------+
+   | CLASSIFIER HEAD: Fully Connected Linear (in_features=32, out_features=3)        |
+   | Activation: Stable Softmax Prohibitions                                         |
+   +---------------------------------------------------------------------------------+
+                                                     ||
+                                                     \/
+   Output Probability Distribution: [P(Normal), P(Shooting), P(Violence)]
 ```
 
-* **Architectural Trade-offs & Justification:** Why did GUARDIAN select a 1D-CNN over recurrent architectures (GRU/LSTM)?
-  1. **Full Temporal Parallelization:** Recurrent networks must process step t before t+1, creating an unavoidable O(T) sequential compute bottleneck. A 1D-CNN applies same-padded temporal convolutions (`kernel_size=5, padding=2`) across all 30 time steps simultaneously (O(1) temporal depth), accelerating training convergence by 4.2x.
-  2. **Smooth Loss Landscape & Gradient Propagation:** By avoiding recurrent Backpropagation Through Time (BPTT), 1D-CNNs eliminate exploding/vanishing gradient dynamics, ensuring stable training on noisy UCF-Crime anomaly trajectories.
-  3. **Zero-Dependency Edge Execution:** Deploying PyTorch or TorchScript on edge servers adds >1.5 GB of dependency bloat. Because 1D convolutions and linear layers can be expressed as simple tensor dot products, we exported the trained PyTorch weights (`temporal_action_weights.npz`) and wrote a standalone, zero-dependency NumPy inference runtime (`NumPyCNNClassifier`).
+* **Why 1D-CNN over GRU/LSTM?**
+  1. **Parallel Training:** Recurrent models must process sequences frame-by-frame, creating a training bottleneck. A 1D-CNN convolving with padding (`kernel_size=5, padding=2`) processes all 30 steps in parallel, speed up training by 4.2x.
+  2. **Stable Gradients:** 1D-CNNs avoid backpropagation over time, eliminating gradient explosion or disappearance issues, resulting in more stable training on noisy videos.
+  3. **Zero-Dependency NumPy Runtime:** Running PyTorch in production requires massive runtime engines (>1.5 GB). Since 1D convolutions can be written as matrix multiplications, we exported the weights (`temporal_action_weights.npz`) and wrote a zero-dependency NumPy inference forward pass.
 
 ```python
 # Code Snippet 3.3: Standalone Zero-Dependency NumPy 1D-CNN Forward Pass (temporal_action.py)
@@ -503,40 +504,40 @@ def forward(self, seq: np.ndarray) -> np.ndarray:
     return exp_logits / np.sum(exp_logits)
 ```
 
-##### 3.3.5. Pipeline Optimizations: Static Displacement Filter and Weapon-Aware Early Exits
-To prevent false alarms in public spaces, GUARDIAN embeds an intelligent short-circuit optimization in `pipeline.py`:
-* **Weapon-Aware Displacement Checking:** If a tracked suspect exhibits cumulative coordinate displacement below threshold delta_thresh = 0.02 across the 30-frame window, standard systems might dismiss the track as a benign stationary object. However, GUARDIAN checks `has_weapon_in_window()`. If a weapon was detected at any point in the historical buffer, the static displacement early-exit is overridden, ensuring that a stationary armed suspect is fully evaluated by the temporal action CNN.
+##### 3.3.5. Pipeline Optimizations: Static Displacement Filter and Weapon-Aware Overrides
+To prevent false alarms in public spaces, GUARDIAN embeds a short-circuit optimization in `pipeline.py`:
+* **Weapon-Aware Displacement Checking:** If a tracked suspect moves less than 2% of the frame size across the 30-frame window, standard systems dismiss the track as a stationary person. However, GUARDIAN checks `has_weapon_in_window()`. If a weapon was detected recently in the temporal history, the static check is bypassed. This ensures that a stationary gunman still triggers the behavioral action classifier.
 
 ---
 
 #### 3.4. Evaluation Metrics
-To provide rigorous academic validation, GUARDIAN is evaluated across three distinct operational axes: single-frame spatial accuracy, temporal sequence classification performance, and real-time edge streaming latency.
+We validate GUARDIAN across three operational axes: spatial detection accuracy, sequence classification performance, and processing latency.
 
-##### 3.4.1. Per-Single-Frame Spatial Metrics
-* **Intersection over Union (IoU):** Measures spatial bounding box overlap between predicted box B_p and ground truth B_gt:
-  IoU(B_p, B_gt) = Area(B_p intersect B_gt) / Area(B_p union B_gt)
+##### 3.4.1. Single-Frame Spatial Metrics
+* **Intersection over Union (IoU):** Measures overlap between predicted box B_p and ground truth B_gt:
+  IoU = Area(B_p intersect B_gt) / Area(B_p union B_gt)
 * **Precision (P) and Recall (R):** Evaluated at IoU >= 0.50:
   Precision = TP / (TP + FP),    Recall = TP / (TP + FN)
-* **Mean Average Precision (mAP@0.5):** The area under the Precision-Recall curve averaged across all C=2 spatial threat classes (`Gun`, `Knife`).
+* **Mean Average Precision (mAP@0.5):** The area under the Precision-Recall curve averaged across weapon classes.
 
 ##### 3.4.2. Behavioral and Sequence Metrics
-* **Sequence-Level Macro F1-score:** Harmonic mean of precision and recall evaluated across M=3 behavioral action classes (**Normal**, **Shooting**, **Violence**) over 30-frame windows:
-  F1_macro = (1/M) * sum( 2 * (P_m * R_m) / (P_m + R_m) )
-* **Temporal Intersection over Union (T-IoU):** Measures the temporal alignment between predicted action duration and ground-truth anomaly duration.
-* **False Alarm Rate (FAR):** The frequency of benign public sequences incorrectly classified as active threats (`Shooting` or `Violence`) per hour of stream monitoring.
+* **Sequence-Level F1-score:** Harmonic mean of precision and recall across the three behavioral classes (**Normal**, **Shooting**, **Violence**):
+  F1 = 2 * (P * R) / (P + R)
+* **Temporal Intersection over Union (T-IoU):** Measures how well the predicted start and end times of an action match the actual event.
+* **False Alarm Rate (FAR):** The frequency of benign situations incorrectly flagged as active threats per hour of video monitoring.
 
-##### 3.4.3. Edge System Resource and Latency Metrics
-* **End-to-End Processing Latency:** Total wall-clock elapsed time required to process a single video frame:
-  tau_total = tau_decode + tau_YOLOv8 + tau_ByteTrack + tau_1D-CNN + tau_WS-Broadcast
-* **System Throughput (FPS):** Effective frame-rate capacity defined as FPS = 1000 / tau_total(ms).
-* **Hardware Utilization:** Peak GPU VRAM allocation (MB) and average CPU/GPU utilization (%) during multi-stream load testing.
+##### 3.4.3. Latency and Resource Metrics
+* **End-to-End Latency:** Time taken to process one video frame:
+  Latency = t_decode + t_YOLOv8 + t_ByteTrack + t_1D-CNN + t_WS-Send
+* **System Throughput:** Effective processing rate in frames per second (FPS).
+* **Resource Usage:** Peak VRAM memory allocation (MB) and average CPU/GPU usage percentages.
 
 ---
 
 ### 4. Results and Analysis
 
 #### 4.1. Experimental Setup
-All training, validation, and real-time streaming benchmarks were conducted on a dedicated edge workstation running a 64-bit Linux kernel (Debian/Ubuntu) and Windows 11 Pro.
+All experiments and tests were run on a dedicated edge workstation.
 
 | Hardware / Software Component | Specification / Version |
 | :--- | :--- |
@@ -548,16 +549,16 @@ All training, validation, and real-time streaming benchmarks were conducted on a
 | **Computer Vision / Tracking** | OpenCV-Python 4.9.0, supervision 0.18.0 (ByteTrack) |
 | **Web Infrastructure** | FastAPI 0.110.0, Uvicorn 0.28.0, Node.js v20.11.0, React 19, Vite 5.1 |
 
-##### 4.1.1. Dataset Splitting and Training Configurations
-* **Spatial YOLOv8 Threat Detector (`trained_model/POC.ipynb`):** The unified weapon dataset (14,850 images) was partitioned into 80% Training (11,880), 10% Validation (1,485), and 10% Test (1,485). The model was trained using SGD with momentum 0.937, initial learning rate 0.01, weight decay 0.0005, and mosaic/cutout augmentations over 150 epochs.
-* **Temporal 1D-CNN Action Classifier (`temporal_training/temporal_training.ipynb`):** Using UCF-Crime and synthetic threat sequences, 5,400 temporal feature windows (30 x 12) were generated (1,800 per class). Data was split 70% Train (3,780), 15% Validation (810), and 15% Test (810). Training utilized the AdamW optimizer (lr = 0.001, beta1=0.9, beta2=0.999, batch size 64) with Cross-Entropy Loss over 50 epochs.
+##### 4.1.1. Dataset Splits and Training Setup
+* **YOLOv8 Threat Detector:** The unified weapon dataset (14,850 images) was split into 80% Train (11,880), 10% Val (1,485), and 10% Test (1,485). The model was trained using SGD with a learning rate of 0.01 and mosaic augmentations for 150 epochs.
+* **1D-CNN Action Classifier:** We used 5,400 feature sequences (1,800 per class) split into 70% Train (3,780), 15% Val (810), and 15% Test (810). Training was performed with the AdamW optimizer (learning rate 0.001, batch size 64) for 50 epochs.
 
 ---
 
 #### 4.2. Presentation of Results
 
-##### 4.2.1. Architecture Progression Schemas (Spatial Weapon Detection)
-To validate our architectural decisions, we benchmarked spatial detection improvements across successive model iterations. As shown in **Table 4.1** and **Figure 4.1**, upgrading from a baseline two-stage detector to our fine-tuned, CCTV-augmented YOLOv8 model increased overall weapon detection mAP@0.5 by +14.2% while reducing inference latency by 78%.
+##### 4.2.1. Model Architecture Progression (Spatial Detection)
+We compared different models on our unified dataset. As shown in **Table 4.1** and **Figure 4.1**, our customized YOLOv8 model improves detection mAP@0.5 by 14.2% while reducing latency by 78% compared to a baseline Faster R-CNN.
 
 ```
 Table 4.1: Architecture Progression and Performance Metrics for Spatial Threat Detection
@@ -588,8 +589,8 @@ Figure 4.1: Single-Frame mAP Progression Across YOLOv8 Architectural Iterations
                   Iter 1         Iter 2         Iter 3         Iter 4 (Final)
 ```
 
-##### 4.2.2. Single-Frame vs. Temporal Sequence Classification Performance
-While single-frame detection locates static threats, sequence classification identifies dynamic violence. **Table 4.2** details the performance of our 30-frame 1D-CNN temporal classifier on test sequences.
+##### 4.2.2. Sequence Classification Performance
+While single-frame detection locates static threats, sequence classification identifies dynamic anomalies. **Table 4.2** details the performance of our 30-frame 1D-CNN temporal classifier.
 
 ```
 Table 4.2: Temporal Action Classifier Sequence Performance (30-Frame Windows)
@@ -609,8 +610,8 @@ Table 4.2: Temporal Action Classifier Sequence Performance (30-Frame Windows)
 
 #### 4.3. Data Analysis and Interpretation
 
-##### 4.3.1. Behavioral Confusion Matrix Analysis
-To interpret classification boundaries and failure modes, we evaluated the empirical confusion matrix across 810 test sequences (**Figure 4.2**).
+##### 4.3.1. Confusion Matrix Analysis
+To understand where the system makes mistakes, we analyzed the confusion matrix across 810 test sequences (**Figure 4.2**).
 
 ```
 Figure 4.2: Sequence Classification Confusion Matrix (Normal vs. Shooting vs. Violence)
@@ -627,17 +628,17 @@ CLASS  | Shooting(1)|      14      |     233      |     23       |  (270 Total)
        +------------+--------------+--------------+--------------+
 ```
 
-* **Interpretation:** The classifier demonstrates outstanding specificity for **Normal** sequences (95.9% true negative rejection), confirming that our static displacement filter effectively prevents false alarms during everyday public movement. The primary source of inter-class confusion occurs between **Shooting** and **Violence** (30 instances of actual Violence predicted as Shooting, and 23 vice versa). This overlap occurs because both armed physical assaults and close-quarters firearm brandishing share high bounding-box closing velocities and weapon-suspect overlaps (IoU > 0). Crucially, fewer than 6.7% of violent or shooting events were misclassified as Normal, ensuring that active security threats trigger immediate system alerts.
+* **Interpretation:** The classifier works extremely well for **Normal** sequences (95.9% correct rejection), which confirms that our static displacement filter effectively avoids false alarms during normal public movements. The primary source of confusion is between **Shooting** and **Violence** (30 instances of actual Violence predicted as Shooting, and 23 vice versa). This is because violent physical actions and weapon brandishing share similar geometric patterns and proximity indicators (such as weapon-suspect overlap). Crucially, less than 6.7% of violent or shooting events were missed as Normal, ensuring that threats trigger immediate alerts.
 
-##### 4.3.2. Error Analysis: Occlusion, Low Lighting, and CCTV Blur
-An analysis of failure cases revealed two primary boundary challenges in real-world surveillance:
-1. **Severe Weapon Occlusion:** When a suspect conceals a firearm inside clothing or behind architectural pillars for >15 consecutive frames, single-frame confidence drops below 0.35. Our enhanced ByteTrack state machine successfully bridges brief dropouts (<10 frames) via Kalman trajectory extrapolation; however, prolonged occlusion dilutes the temporal weapon-proximity feature (f10), slightly delaying threat escalation.
-2. **Extreme Nighttime Sensor Noise:** In low-light CCTV streams without IR illumination, digital grain can generate transient edge patterns resembling bladed weapons. By enforcing a 30-frame temporal window, GUARDIAN suppresses these transient single-frame false positives, as noise artifacts lack persistent linear tracking velocities (f5 ... f8).
+##### 4.3.2. Error Analysis: Occlusions, Low Light, and Blur
+An analysis of failure cases revealed two main real-world challenges:
+1. **Severe Weapon Occlusion:** If a suspect conceals a gun inside clothing or behind a pillar for more than 15 frames, single-frame detection falls below threshold limits. Our tracking machine bridges brief gaps (<10 frames) using Kalman path projections; however, longer occlusions lower the weapon-proximity values, slightly delaying threat alerts.
+2. **Sensor Noise:** Low-light videos can create random grain patterns that look like blades. Because the 1D-CNN requires a threat to be persistent across a 30-frame window, it successfully filters out these transient single-frame errors.
 
 ---
 
 #### 4.4. Comparison with Existing Approaches
-We benchmarked GUARDIAN against three established academic and industry surveillance detection paradigms on identical edge hardware (**Table 4.3**).
+We benchmarked GUARDIAN against standard surveillance approaches on identical hardware (**Table 4.3**).
 
 ```
 Table 4.3: Empirical Comparison Against Existing Surveillance and Threat Detection Paradigms
@@ -654,20 +655,20 @@ Table 4.3: Empirical Comparison Against Existing Surveillance and Threat Detecti
 +-------------------------------------+--------------+------------+---------------+------------------+
 ```
 
-* **Comparative Takeaways:**
-  * Compared to traditional **YOLOv5s + SORT**, GUARDIAN reduces the False Alarm Rate by **10-fold** (0.18/hr vs. 1.84/hr) by replacing single-frame alert triggers with 30-frame temporal action validation.
-  * Compared to **volumetric 3D-CNNs (I3D)**, GUARDIAN operates **6.3x faster** (17.6 ms vs. 112.0 ms) while achieving a +4.6% higher F1-score, proving that structured 1D feature vectors capture behavioral kinetics far more efficiently than raw pixel volume convolutions.
-  * Compared to a **GRU recurrent pipeline**, our 1D-CNN NumPy runtime executes sequence classification **40% faster** while eliminating recurrent gating instability.
+* **Key Takeaways:**
+  * Compared to traditional **YOLOv5s + SORT**, GUARDIAN reduces the False Alarm Rate by **10-fold** (0.18/hr vs. 1.84/hr) by validating threats across 30 frames.
+  * Compared to **volumetric 3D-CNNs (I3D)**, GUARDIAN operates **6.3x faster** (17.6 ms vs. 112.0 ms) while achieving a higher F1-score. This proves that simple 1D coordinate vectors are more efficient than processing raw video frames.
+  * Compared to a **GRU recurrent pipeline**, our NumPy implementation is **40% faster** and does not suffer from gating instability.
 
 ---
 
 #### 4.5. Discussion of Findings
 
-##### 4.5.1. Real-World Operational Implications
-The empirical results confirm that GUARDIAN successfully solves the spatial-temporal disconnect in automated surveillance. In real-world control rooms, traditional detectors generate hundreds of nuisance alarms daily. By requiring a threat to exhibit both spatial certainty (YOLOv8 confidence >= 0.35) and temporal behavioral validity (1D-CNN threat probability >= 0.60 over 30 frames), GUARDIAN provides security operators with actionable, high-fidelity alerts.
+##### 4.5.1. Real-World Security Operations
+Our tests show that GUARDIAN successfully bridges the gap between single-frame spatial detection and sequence analysis. In real-world control rooms, traditional object detectors generate too many false alarms, causing operators to ignore alerts. By requiring both spatial evidence (YOLOv8 confidence >= 0.35) and temporal behavior confirmation (1D-CNN probability >= 0.60 over 30 frames), GUARDIAN delivers high-fidelity alerts.
 
-##### 4.5.2. Edge Processing Latency vs. Accuracy Trade-Offs
-A critical finding of this project is that end-to-end edge streaming performance depends heavily on frontend-backend architectural decoupling. During initial prototypes, rendering OpenCV bounding boxes server-side added 14.2 ms of encoding latency per frame. By transmitting lightweight JSON track payloads (`StreamTrackPayload`) over WebSockets and rendering HTML/SVG overlays on the React client, server latency dropped to 17.6 ms total (**Figure 4.3**). Even at high track densities (15 simultaneous suspects), GUARDIAN maintains >45 FPS, well above standard 25 FPS CCTV framerates.
+##### 4.5.2. Edge Processing and Web Decoupling
+A key finding is that edge speed depends heavily on frontend-backend separation. In early trials, drawing boxes on the server using OpenCV added 14.2 ms per frame. By sending lightweight JSON track payloads over WebSockets and rendering HTML/SVG overlays on the client using React, backend latency dropped to 17.6 ms (**Figure 4.3**). Even with 15 active tracks in standard HD video, the system keeps execution speeds above 45 FPS, matching real CCTV camera framerates.
 
 ```
 Figure 4.3: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
@@ -690,13 +691,13 @@ Figure 4.3: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
 ### 5. Conclusion and Future Work
 
 #### 5.1. Conclusion
-This undergraduate research project successfully designed, implemented, and empirically validated **GUARDIAN**, an intelligent real-time video analytics platform for edge-assisted surveillance. By synthesizing an edge-optimized YOLOv8 spatial detector, a zero-lag ByteTrack identity persistence state machine, and a zero-dependency 1D-CNN temporal action classifier, GUARDIAN overcomes the limitations of single-frame security monitoring. The system achieves an 89.4% single-frame mAP@0.5 on weapons and an 88.7% sequence-level macro F1-score across behavioral threat classes while operating at 56 FPS (17.6 ms/frame) on consumer edge hardware. GUARDIAN demonstrates that structured 1D spatial-kinetic-proximity feature modeling provides a superior, low-latency alternative to heavy volumetric 3D-CNNs and recurrent RNN architectures for real-world surveillance operations.
+This project designed, implemented, and validated **GUARDIAN**, an edge-optimized real-time video analytics platform for threat detection. By combining YOLOv8 spatial detection, a zero-lag ByteTrack state machine, and a zero-dependency 1D-CNN action classifier, GUARDIAN solves the limitations of single-frame security monitoring. The system reaches 89.4% single-frame mAP@0.5 on weapons and an 88.7% F1-score on actions, processing frames in 17.6 ms (56 FPS) on standard edge hardware. This demonstrates that structured 1D spatial-kinetic-proximity vectors are a faster, lighter alternative to volumetric 3D-CNNs and recurrent networks.
 
 #### 5.2. Future Work
-To extend GUARDIAN's capabilities in future academic research and industrial deployment, we propose three technical directions:
-1. **Self-Attention and Transformer Temporal Mechanisms:** While the 1D-CNN captures local 5-frame kinetic kernels effectively, replacing the convolutional stack with a lightweight Temporal Attention Transformer [16] could model long-range dependencies (T > 120 frames, or 4+ seconds) to detect subtle pre-attack loitering behaviors without gradient degradation.
-2. **Multi-Camera Edge Re-Identification (ReID):** Integrating a lightweight OSNet ReID embedding head into the ByteTrack pipeline would enable GUARDIAN to track armed suspects seamlessly across disjoint physical camera views in large facility networks.
-3. **Hardware Quantization via TensorRT:** Exporting the ONNX YOLOv8 backbone and NumPy 1D-CNN weights into INT8 precision via NVIDIA TensorRT would further reduce edge latency below 8 ms/frame, enabling deployment on embedded edge appliances such as the NVIDIA Jetson Orin Nano.
+We suggest three paths for future research and deployment:
+1. **Temporal Transformers:** While 1D-CNNs model local 5-frame kinetics well, replacing the convolutions with a lightweight Temporal Transformer [16] could analyze longer windows (T > 120 frames) to recognize slow suspicious activities like loitering.
+2. **Multi-Camera Re-Identification (ReID):** Adding a lightweight ReID embedding module to the ByteTrack system would enable tracking suspect identities across different cameras in large facilities.
+3. **TensorRT Optimization:** Compiling the YOLOv8 and 1D-CNN weights into INT8 precision using NVIDIA TensorRT would reduce latency below 8 ms per frame, enabling execution on low-cost devices like the NVIDIA Jetson Orin Nano.
 
 ---
 
@@ -766,7 +767,7 @@ To extend GUARDIAN's capabilities in future academic research and industrial dep
 
 ### 7. Appendix A: Setup and Operational Instructions
 
-This appendix provides exhaustive technical instructions for compiling, testing, and deploying GUARDIAN in local development and production Docker environments.
+This appendix provides technical instructions for compiling, testing, and deploying GUARDIAN in local development and production Docker environments.
 
 #### A.1. System Prerequisites
 * **Operating System:** Ubuntu 22.04 LTS / Debian 12 / Windows 11 Pro (WSL2 enabled).

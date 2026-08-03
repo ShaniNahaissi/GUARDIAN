@@ -196,8 +196,15 @@ def convert_md_to_docx(md_path, output_docx_path):
         if line.strip():
             add_styled_paragraph(doc, line.strip(), style='Normal', space_after=6)
 
-    doc.save(output_docx_path)
-    print(f"Successfully generated Word document: {output_docx_path}")
+    try:
+        doc.save(output_docx_path)
+        print(f"Successfully generated Word document: {output_docx_path}")
+    except PermissionError:
+        fallback_path = output_docx_path.replace(".docx", "_New.docx")
+        print(f"WARNING: Permission denied writing to {output_docx_path}. The file might be open in another application.")
+        print(f"Attempting to write to fallback file: {fallback_path}")
+        doc.save(fallback_path)
+        print(f"Successfully generated fallback Word document: {fallback_path}")
 
 if __name__ == '__main__':
     md_path = os.path.join(os.path.dirname(__file__), 'FINAL_PROJECT_BOOK.md')
