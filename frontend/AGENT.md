@@ -29,24 +29,26 @@ frontend/
 |---|---|
 | `app/src/App.tsx` | Root component. Routing logic and auth gate live here |
 | `app/src/services/dataService.ts` | ALL data access (mock and backend). Add new API calls here |
-| `app/src/context/AuthContext.tsx` | User state: `user`, `login`, `logout`, `register` |
+| `app/src/services/authApi.ts` | Backend JWT authentication and role helper functions |
+| `app/src/context/AuthContext.tsx` | User state: `user`, `login`, `logout`, `register` using HTTP Bearer token flow |
 | `app/src/context/ToastContext.tsx` | Global toasts: call `useToast().showToast(msg, type)` |
 | `app/src/index.css` | Theme tokens (Tailwind v4 `@theme` block). Change colors here |
+| `app/src/nav/appHash.ts` | View sync module that reads and writes URL hashes (e.g. `#/dashboard`) |
 
 ---
 
 ## Routing System
 
-**No react-router.** Navigation is a `useState` in `App.tsx`.
+**No react-router-dom package.** Custom state-based navigation synchronized with the URL hash via `src/nav/appHash.ts` to support deep links and multiple tabs.
 
 ```typescript
 // Valid view strings:
-'dashboard' | 'camera' | 'settings' | 'add-camera'
+'dashboard' | 'camera' | 'settings' | 'add-camera' | 'edit-camera' | 'camera-stream' | 'admin-users'
 ```
 
 To add a new page:
 1. Create `src/pages/NewPage.tsx`
-2. Add new string to the union type in `App.tsx`
+2. Add new string to the union type in `App.tsx` and to the `HASH_VIEWS` set in `src/nav/appHash.ts`
 3. Add `{currentView === 'new-page' && <NewPage ... />}` in `AppContent`
 4. Add a button to `Sidebar.tsx` calling `onNavigate('new-page')`
 
@@ -57,11 +59,11 @@ To add a new page:
 All data access MUST go through `src/services/dataService.ts`.
 
 ```typescript
-// Pattern for every new function:
+// Pattern for every function:
 export const myNewFetch = async (): Promise<MyType> => {
   if (isBackendEnabled()) {
     try {
-      const res = await fetch(`${getBackendUrl()}/my-endpoint`);
+      const res = await fetch(`${getBackendUrl()}/my-endpoint`, { headers: apiAuthHeaders() });
       if (!res.ok) throw new Error('Failed');
       return await res.json();
     } catch (e) {
@@ -74,7 +76,8 @@ export const myNewFetch = async (): Promise<MyType> => {
 ```
 
 `isBackendEnabled()` reads `localStorage.guardian_use_backend`. Default is `true`.  
-`getBackendUrl()` reads `localStorage.guardian_backend_url` → `VITE_BACKEND_URL` → in **dev** defaults to **`/api`** so requests go through the Vite proxy (proxy uses `https://127.0.0.1:8000` with `secure: false`). Avoid defaulting the browser to `https://localhost:8000/api` in dev: self-signed TLS often yields `TypeError: Load failed`. Production builds without `VITE_BACKEND_URL` fall back to `https://localhost:8000/api`.
+`getBackendUrl()` reads `localStorage.guardian_backend_url` → `VITE_BACKEND_URL` → in **dev** defaults to **`/api`** so requests go through the Vite proxy (proxy uses `https://127.0.0.1:8000` with `secure: false`).
+`apiAuthHeaders()` retrieves the JSON Web Token from local storage via `getStoredAccessToken()` and attaches it to request headers as `Authorization: Bearer <token>`.
 
 ---
 
@@ -84,15 +87,19 @@ export const myNewFetch = async (): Promise<MyType> => {
 App
 └── ToastProvider
     └── AuthProvider
-        ├── LoginPage          (shown when user === null)
-        └── MainLayout         (shown when user exists)
-            ├── Sidebar
-            │   └── Tutorial   (modal, activated by Help button)
-            └── <current page>
-                ├── Dashboard
-                ├── CameraView
-                ├── SettingsPage
-                └── AddCameraPage
+        └── StreamingSessionProvider
+            ├── LoginPage          (shown when user === null)
+            └── MainLayout         (shown when user exists)
+                ├── Sidebar
+                │   └── Tutorial   (modal, activated by Help button)
+                └── <current page>
+                    ├── Dashboard
+                    ├── CameraView
+                    ├── SettingsPage
+                    ├── AddCameraPage
+                    ├── EditCameraPage
+                    ├── CameraStreamPage  (sends canvas/file JPEG stream via worker tick)
+                    └── AdminUsersPage     (admin-only user list / registration settings)
 ```
 
 ---
@@ -133,7 +140,12 @@ const { user, login, logout, register } = useAuth();
 ```
 
 `user` is `null` when logged out. `App.tsx` gates all pages behind `user !== null`.  
-Currently mock auth — any username/password works. Replace `login()` body in `AuthContext.tsx` with real API call.
+All authentication actions perform real requests against the backend using endpoints `/api/auth/login`, `/api/auth/register`, and `/api/auth/me`. The acquired token is saved in `localStorage.guardian_access_token` for session recovery.
+
+---
+
+## Background Capture Tick Worker
+When a browser tab is in the background, browser engines throttle `setInterval`/`setTimeout` to 1 tick per second to save CPU. This degrades video frame streaming to 1 FPS. To solve this, `CameraStreamPage.tsx` uses a dedicated Web Worker that runs an interval tick loop. The worker posts messages back to the main thread, bypassing page visibility limits and maintaining stable ~8 FPS streaming rate in the background.
 
 ---
 

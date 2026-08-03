@@ -22,21 +22,28 @@ A real-time weapon detection monitoring dashboard built with **React**, **TypeSc
 frontend/app/src/
 ├── components/
 │   ├── atoms/           # Smallest reusable units (Button, Badge, Card)
-│   └── molecules/       # Composite components (Sidebar, StatCard, CameraFeedCard, AlertBanner, ThreatPanel, Tutorial)
+│   └── molecules/       # Composite components (Sidebar, StatCard, CameraFeedCard, AlertBanner, ThreatPanel, Tutorial, LiveStreamPreview)
 ├── context/
-│   ├── AuthContext.tsx  # User login/logout/register state
-│   └── ToastContext.tsx # App-wide toast notifications
+│   ├── AuthContext.tsx  # User login/logout/register state using JWT auth
+│   ├── ToastContext.tsx # App-wide toast notifications
+│   └── StreamingSessionContext.tsx # Stream session tracking
 ├── layouts/
 │   └── MainLayout.tsx   # Shell layout with Sidebar + main content area
+├── nav/
+│   └── appHash.ts       # Hash-based view router sync helper
 ├── pages/
 │   ├── LoginPage.tsx    # Auth page (login + register)
 │   ├── Dashboard.tsx    # Main camera grid view
-│   ├── CameraView.tsx   # Single camera focus view with threat panel
-│   ├── SettingsPage.tsx # Data source configuration
-│   └── AddCameraPage.tsx# Form to register new cameras
+│   ├── CameraView.tsx   # Single camera focus view with threat panel and snapshot fallback
+│   ├── SettingsPage.tsx # Data source configuration and local storage toggles
+│   ├── AddCameraPage.tsx# Form to register new cameras
+│   ├── EditCameraPage.tsx# Edit camera metadata
+│   ├── CameraStreamPage.tsx# Local stream source simulator (device camera/file upload)
+│   └── AdminUsersPage.tsx# User accounts configuration dashboard (admin only)
 ├── services/
+│   ├── authApi.ts       # REST client for auth endpoints
 │   └── dataService.ts   # Data layer: mock data OR backend API calls
-├── App.tsx              # Root component, routing (state-based), auth gate
+├── App.tsx              # Root component, hash-based routing, auth gate
 ├── main.tsx             # React entry point
 └── index.css            # Global Tailwind v4 styles + theme tokens
 ```
@@ -147,23 +154,29 @@ No external state library. Uses React's built-in `useState` and `createContext`:
 
 ## Backend Integration
 
-All data fetching lives in `src/services/dataService.ts`.
+All data fetching lives in `src/services/dataService.ts` and `src/services/authApi.ts`.
 
-Each function checks `isBackendEnabled()`. When true, it does a `fetch()` to the backend. Stubs are clearly marked for the next developer to fill in routes.
+Each function checks `isBackendEnabled()`. When true, it does a `fetch()` to the backend. API request headers are loaded with the active JSON Web Token (`Authorization: Bearer <token>`).
 
-**Current stubs:**
-- `GET /cameras` → `getCameras()`
-- `GET /stats` → `getSystemStats()`
-- `POST /cameras` → `addCamera()`
+**Functional endpoints:**
+- `POST /api/auth/login` → `loginRequest()`
+- `POST /api/auth/register` → `registerRequest()`
+- `GET /api/auth/me` → `fetchMe()`
+- `GET /api/cameras` → `getCameras()`
+- `POST /api/cameras` → `addCamera()`
+- `PUT /api/cameras/{id}` → `updateCamera()`
+- `DELETE /api/cameras/{id}` → `deleteCamera()`
+- `GET /api/stats` → `getSystemStats()`
+- `GET /api/streams/{id}/meta` → `fetchStreamMeta()`
 
 ---
 
 ## Routing
 
-No `react-router-dom`. Navigation is managed by a `currentView` state string in `App.tsx`:
+No `react-router-dom`. Navigation is managed by a `currentView` state string in `App.tsx` and synchronized to the URL hash:
 
 ```
-'dashboard' | 'camera' | 'settings' | 'add-camera'
+'dashboard' | 'camera' | 'settings' | 'add-camera' | 'edit-camera' | 'camera-stream' | 'admin-users'
 ```
 
 ---
