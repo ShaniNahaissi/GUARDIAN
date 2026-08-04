@@ -208,5 +208,5 @@ def convert_md_to_docx(md_path, output_docx_path):
 
 if __name__ == '__main__':
     md_path = os.path.join(os.path.dirname(__file__), 'FINAL_PROJECT_BOOK.md')
-    out_path = os.path.join(os.path.dirname(__file__), 'GUARDIAN_Final_Project_Book.docx')
+    out_path = os.path.join(os.path.dirname(__file__), 'GUARDIAN_Final_Project_Book_New.docx')
     convert_md_to_docx(md_path, out_path)
