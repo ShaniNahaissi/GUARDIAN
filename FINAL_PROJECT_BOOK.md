@@ -230,6 +230,8 @@ Figure 3.1: GUARDIAN End-to-End System Architecture Diagram
 
 ##### 3.1.1. Full-Stack Layer Responsibilities
 * **UI Layer (Frontend):** Developed in React 19, TypeScript, and Tailwind CSS v4. The UI manages the view state (`dashboard`, `camera`, `settings`, `add-camera`, `edit-camera`, `camera-stream`). Live streams are shown using dynamic previews (`LiveStreamPreview.tsx`) and full views (`CameraView.tsx`). To keep performance high, bounding boxes and warnings are drawn on the client using responsive SVG overlays.
+
+*Note: The actual dashboard screenshot (`frontend/frontend_definition/main_page.png`) showing the cameras list and live status cards, and the stream view screenshot (`frontend/frontend_definition/camera_view.png`) displaying live video overlayed with client-side bounding boxes and threat labels should be manually inserted here in the final compiled Word document.*
 * **API Layer (Backend REST):** A FastAPI app that provides camera CRUD operations (`GET/POST/PUT/DELETE /api/cameras`), health checks (`/health`), and system stats (`/api/stats`) secured with role permissions.
 * **Streaming Layer (FastAPI WebSockets):** Low-latency communication uses standard WebSocket protocols:
   * `WS /producer/{stream_id}`: Receives raw binary frames from the video producer.
@@ -723,6 +725,8 @@ Figure 4.4: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
     0 |                                | YOLOv8: 12.1  |               | YOLOv8:  19.3 |
       +--------------------------------+---------------+---------------+---------------+
 ```
+
+*Note: The actual real-time telemetry metrics plots showing latency performance (`metrics/current_metrics.png` or `metrics/expected_metrics.png`) should be manually inserted here in the final compiled Word document.*
 
 ---
 
