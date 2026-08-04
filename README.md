@@ -28,3 +28,6 @@ docker compose -f docker-compose.yml up --build
 In production, a real-time visual log viewer dashboard is deployed automatically. Open your browser and navigate to:
 - **`http://<server-ip>:9999`**
 Here you can filter, search, and monitor streaming inference latency (FPS/process ms), CPU utilization, VRAM usage, and active threat alert logs.
+
+## Note on Documentation
+The `old/` directory and all `.docx` files are deprecated and ignored. They do not need to be maintained or updated.
