@@ -4,7 +4,7 @@ Onboarding for **new developers** and **AI coding agents**. Read this file first
 
 ## Project goal
 
-Guardian is a proof-of-concept **real-time monitoring** app: camera or edge streams **JPEG frames** to a **Python backend**, **YOLOv8 ONNX** inference detects targets, **ByteTrack** manages identities and smooths bounding boxes, and a **temporal 1D-CNN classifier** performs sequence classification to recognize active threats (Shooting, Violence) over a 30-frame window. The **React** UI lists cameras, displays the live feed overlayed with active threat states (e.g. `Suspect (Violence)`), and shows alerts in real-time.
+Guardian is a proof-of-concept **real-time monitoring** app: camera or local streams **JPEG frames** to a **Python backend**, **YOLOv8 ONNX** inference detects targets, **ByteTrack** manages identities and smooths bounding boxes, and a **temporal 1D-CNN classifier** performs sequence classification to recognize active threats (Shooting, Violence) over a 30-frame window. The **React** UI lists cameras, displays the live feed overlayed with active threat states (e.g. `Suspect (Violence)`), and shows alerts in real-time.
 
 ## Architecture
 
