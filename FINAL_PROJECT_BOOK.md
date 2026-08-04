@@ -231,7 +231,9 @@ Figure 3.1: GUARDIAN End-to-End System Architecture Diagram
 ##### 3.1.1. Full-Stack Layer Responsibilities
 * **UI Layer (Frontend):** Developed in React 19, TypeScript, and Tailwind CSS v4. The UI manages the view state (`dashboard`, `camera`, `settings`, `add-camera`, `edit-camera`, `camera-stream`). Live streams are shown using dynamic previews (`LiveStreamPreview.tsx`) and full views (`CameraView.tsx`). To keep performance high, bounding boxes and warnings are drawn on the client using responsive SVG overlays.
 
-*Note: The actual dashboard screenshot (`frontend/frontend_definition/main_page.png`) showing the cameras list and live status cards, and the stream view screenshot (`frontend/frontend_definition/camera_view.png`) displaying live video overlayed with client-side bounding boxes and threat labels should be manually inserted here in the final compiled Word document.*
+*Note: Manually insert [main_page.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/frontend/frontend_definition/main_page.png) here. This screenshot displays the GUARDIAN security dashboard view, which contains the list of active cameras, connection state metrics, and alert panels.*
+
+*Note: Manually insert [camera_view.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/frontend/frontend_definition/camera_view.png) here. This screenshot displays the active live-stream viewport inside the dashboard, showcasing client-side SVG bounding boxes and real-time behavioral classifications (e.g. "Suspect (Violence)") overlayed on the video feed.*
 * **API Layer (Backend REST):** A FastAPI app that provides camera CRUD operations (`GET/POST/PUT/DELETE /api/cameras`), health checks (`/health`), and system stats (`/api/stats`) secured with role permissions.
 * **Streaming Layer (FastAPI WebSockets):** Low-latency communication uses standard WebSocket protocols:
   * `WS /producer/{stream_id}`: Receives raw binary frames from the video producer.
@@ -726,7 +728,7 @@ Figure 4.4: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
       +--------------------------------+---------------+---------------+---------------+
 ```
 
-*Note: The actual real-time telemetry metrics plots showing latency performance (`metrics/current_metrics.png` or `metrics/expected_metrics.png`) should be manually inserted here in the final compiled Word document.*
+*Note: Manually insert [current_metrics.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/current_metrics.png) or [expected_metrics.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/expected_metrics.png) here. This plot displays the real-time processing throughput, frame latency variations, and CPU/GPU memory usage during live edge inference.*
 
 ---
 
