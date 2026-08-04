@@ -39,7 +39,7 @@ Guardian is a proof-of-concept **real-time monitoring** app: camera or edge stre
 2. **Stream URLs** — REST lives under **`/api`**; **stream WebSockets and snapshot** live at **origin root**: **`/producer/{id}`**, **`/consumer/{id}`** (WS), **`/consumer/{id}/frame`** (GET).
 3. **Dev proxy** — Vite proxies `/api`, `/producer`, `/consumer`, `/health` to **`https://127.0.0.1:8000`** by default.
 4. **TypeScript** — `verbatimModuleSyntax`: use `import type` for type-only imports.
-5. **Deprecated / Ignored Files** — The `old/` directory and all `.docx` files are deprecated and ignored. AI coding agents and developers should ignore them and avoid updating them.
+5. **Deprecated / Legacy Files** — The `old/` directory contains deprecated, older versions of documentation (such as `old/GUARDIAN_Final_Project_Book.docx`). The current compiled Word document is `GUARDIAN_Final_Project_Book_New.docx` at the root.
 
 ## Known bug / gap (document for QA)
 

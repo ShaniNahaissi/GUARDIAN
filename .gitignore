@@ -220,7 +220,3 @@ deploy_key
 deploy_key.pub
 known_hosts
 deploy-password.env
-
-# Deprecated Word documents and old folder
-*.docx
-old/

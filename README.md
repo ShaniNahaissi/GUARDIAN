@@ -30,4 +30,4 @@ In production, a real-time visual log viewer dashboard is deployed automatically
 Here you can filter, search, and monitor streaming inference latency (FPS/process ms), CPU utilization, VRAM usage, and active threat alert logs.
 
 ## Note on Documentation
-The `old/` directory and all `.docx` files are deprecated and ignored. They do not need to be maintained or updated.
+The `old/` directory contains legacy/older versions of documentation (such as `old/GUARDIAN_Final_Project_Book.docx`). The current compiled Word document is `GUARDIAN_Final_Project_Book_New.docx` at the root.
