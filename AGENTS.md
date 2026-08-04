@@ -4,7 +4,7 @@ Onboarding for **new developers** and **AI coding agents**. Read this file first
 
 ## Project goal
 
-Guardian is a proof-of-concept **real-time monitoring** app: camera or local streams **JPEG frames** to a **Python backend**, **YOLOv8 ONNX** inference detects targets, **ByteTrack** manages identities and smooths bounding boxes, and a **temporal 1D-CNN classifier** performs sequence classification to recognize active threats (Shooting, Violence) over a 30-frame window. The **React** UI lists cameras, displays the live feed overlayed with active threat states (e.g. `Suspect (Violence)`), and shows alerts in real-time.
+Guardian is a proof-of-concept **near real-time monitoring** app: camera or local streams **JPEG frames** to a **Python backend**, **YOLOv8 ONNX** inference detects targets, **ByteTrack** manages identities and smooths bounding boxes, and a **temporal 1D-CNN classifier** performs sequence classification to recognize active threats (Shooting, Violence) over a 30-frame window. The **React** UI lists cameras, displays the live feed overlayed with active threat states (e.g. `Suspect (Violence)`), and shows alerts in near real-time.
 
 ## Architecture
 
@@ -79,6 +79,6 @@ Guardian is a proof-of-concept **real-time monitoring** app: camera or local str
 - [ ] `.env.example` in `frontend/app` with `VITE_BACKEND_URL=/api`.
 
 ### Observability
-- [x] Real-time metrics dashboard: process latency, input/output bytes, track sizes, CPU utilization, VRAM usage, and active threat log filters.
+- [x] Near real-time metrics dashboard: process latency, input/output bytes, track sizes, CPU utilization, VRAM usage, and active threat log filters.
 - [x] Visual logs UI integration (Dozzle) running on port `9999`.
 - [ ] Optional OpenTelemetry for FastAPI.

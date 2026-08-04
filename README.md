@@ -1,6 +1,6 @@
 # GUARDIAN
 
-GUARDIAN is an intelligent real-time video analytics system designed for threat detection in CCTV streams. It leverages an optimized YOLOv8 model for static weapon detection, ByteTrack for persistent tracking, and a lightweight temporal 1D-CNN classifier to recognize active threat actions (Shooting and Violence) over time.
+GUARDIAN is an intelligent near real-time video analytics system designed for threat detection in CCTV streams. It leverages an optimized YOLOv8 model for static weapon detection, ByteTrack for persistent tracking, and a lightweight temporal 1D-CNN classifier to recognize active threat actions (Shooting and Violence) over time.
 
 ## Quickstart (Development)
 
@@ -25,7 +25,7 @@ docker compose -f docker-compose.yml up --build
 ```
 
 ### Visual Logs UI (Dozzle)
-In production, a real-time visual log viewer dashboard is deployed automatically. Open your browser and navigate to:
+In production, a near real-time visual log viewer dashboard is deployed automatically. Open your browser and navigate to:
 - **`http://<server-ip>:9999`**
 Here you can filter, search, and monitor streaming inference latency (FPS/process ms), CPU utilization, VRAM usage, and active threat alert logs.
 

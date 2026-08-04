@@ -1,5 +1,5 @@
 # GUARDIAN
-## Real-Time Multi-Modal Threat and Behavioral Detection in Surveillance Video Streams Using Optimized YOLOv8, ByteTrack, and Temporal 1D-CNN Networks
+## Near Real-Time Multi-Modal Threat and Behavioral Detection in Surveillance Video Streams Using Optimized YOLOv8, ByteTrack, and Temporal 1D-CNN Networks
 
 ---
 
@@ -13,7 +13,7 @@
                                   IN COMPUTER SCIENCE
                           (SPECIALIZATION IN DEEP LEARNING)
 
-TITLE:       GUARDIAN: Real-Time Multi-Modal Threat and Behavioral Detection in 
+TITLE:       GUARDIAN: Near Real-Time Multi-Modal Threat and Behavioral Detection in 
              Surveillance Video Streams Using Optimized YOLOv8, ByteTrack, 
              and Temporal 1D-CNN Networks
 
@@ -26,9 +26,9 @@ DATE:        August 2026
 
 #### Executive Summary
 
-Real-time surveillance systems face a major practical challenge: while modern security setups generate massive amounts of continuous closed-circuit television (CCTV) video, traditional automated monitoring tools analyze frames individually. This lack of time-based context leads to frequent false alarms and limits their usefulness. This project introduces **GUARDIAN**, a real-time threat and behavioral detection platform designed for intelligent video surveillance. GUARDIAN connects spatial object detection and temporal action recognition using a three-stage pipeline: (1) fast object detection using a highly-optimized YOLOv8 model in ONNX format to find threats in single frames (**Gun**, **Knife**, and **Suspect**); (2) stable multi-object tracking through a custom state machine based on **ByteTrack**, which keeps track of individuals even when they are temporarily blocked or hidden; and (3) sequence-level action recognition using a lightweight **1D Convolutional Neural Network (1D-CNN)** that analyzes 12-dimensional features (movement, position, and proximity to weapons) over a rolling 30-frame window.
+Surveillance systems operating in near real-time face a major practical challenge: while modern security setups generate massive amounts of continuous closed-circuit television (CCTV) video, traditional automated monitoring tools analyze frames individually. This lack of time-based context leads to frequent false alarms and limits their usefulness. This project introduces **GUARDIAN**, a near real-time threat and behavioral detection platform designed for intelligent video surveillance. GUARDIAN connects spatial object detection and temporal action recognition using a three-stage pipeline: (1) fast object detection using a highly-optimized YOLOv8 model in ONNX format to find threats in single frames (**Gun**, **Knife**, and **Suspect**); (2) stable multi-object tracking through a custom state machine based on **ByteTrack**, which keeps track of individuals even when they are temporarily blocked or hidden; and (3) sequence-level action recognition using a lightweight **1D Convolutional Neural Network (1D-CNN)** that analyzes 12-dimensional features (movement, position, and proximity to weapons) over a rolling 30-frame window.
 
-Our approach combines data from different weapon and CCTV datasets (including Kaggle, Roboflow, and **UCF-Crime**) and applies realistic distortions like motion blur, camera noise, perspective warp, and partial blockages (cutouts) during training. To run the system in real time without heavy deep learning frameworks on local servers, we exported the trained PyTorch 1D-CNN weights to a fast, zero-dependency NumPy inference engine. Testing shows that GUARDIAN reaches an 89.4% mean Average Precision (mAP@0.5) for weapon detection and an 88.7% F1-score for classifying behaviors (**Normal**, **Shooting**, **Violence**). The system processes video frames in under 22 ms (>45 frames per second) on standard hardware. This is faster and more stable than recurrent neural networks, while also reducing false alarms in crowded surveillance scenes.
+Our approach combines data from different weapon and CCTV datasets (including Kaggle, Roboflow, and **UCF-Crime**) and applies realistic distortions like motion blur, camera noise, perspective warp, and partial blockages (cutouts) during training. To run the system as close to real-time as possible without heavy deep learning frameworks on local servers, we exported the trained PyTorch 1D-CNN weights to a fast, zero-dependency NumPy inference engine. Testing shows that GUARDIAN reaches an 89.4% mean Average Precision (mAP@0.5) for weapon detection and an 88.7% F1-score for classifying behaviors (**Normal**, **Shooting**, **Violence**). The system processes video frames in under 22 ms (>45 frames per second) on standard hardware. This is faster and more stable than recurrent neural networks, while also reducing false alarms in crowded surveillance scenes.
 
 ---
 
@@ -108,24 +108,24 @@ Our approach combines data from different weapon and CCTV datasets (including Ka
 ### 1. Introduction
 
 #### 1.1. Background
-Modern security systems are shifting from investigating past events to preventing threats in real time. Although CCTV cameras are now installed almost everywhere, security staff cannot watch all screens constantly due to tiredness and loss of focus [1]. Over the last decade, Convolutional Neural Networks (CNNs) have improved computer vision, making it possible to identify specific objects in single images [2]. However, true threat detection requires understanding not just *what* objects are in a scene, but *how* people behave and interact over time [3]. For example, a person holding a knife while preparing food is normal, but a person moving quickly and aggressively with a knife toward someone else is an active attack. Therefore, modern surveillance systems must combine object detection, multi-frame tracking, and temporal behavioral classification.
+Modern security systems are shifting from investigating past events to preventing threats in near real-time. Although CCTV cameras are now installed almost everywhere, security staff cannot watch all screens constantly due to tiredness and loss of focus [1]. Over the last decade, Convolutional Neural Networks (CNNs) have improved computer vision, making it possible to identify specific objects in single images [2]. However, true threat detection requires understanding not just *what* objects are in a scene, but *how* people behave and interact over time [3]. For example, a person holding a knife while preparing food is normal, but a person moving quickly and aggressively with a knife toward someone else is an active attack. Therefore, modern surveillance systems must combine object detection, multi-frame tracking, and temporal behavioral classification.
 
 #### 1.2. Problem Statement
 Current automated video surveillance systems face three major technical challenges that limit their use in real-world environments:
 1. **The Spatial-Temporal Disconnect:** Traditional detectors analyze frames separately. They cannot distinguish between stationary, harmless objects and violent actions, which leads to too many false alarms [4].
-2. **High Computational Demands for Action Recognition:** Video action recognition models like 3D-CNNs and Two-Stream networks require huge amounts of memory and processor power [5]. Running these models on local servers makes them too slow (>100 ms per frame), preventing real-time alerts.
+2. **High Computational Demands for Action Recognition:** Video action recognition models like 3D-CNNs and Two-Stream networks require huge amounts of memory and processor power [5]. Running these models on local servers makes them too slow (>100 ms per frame), preventing near real-time alerts.
 3. **CCTV Quality Loss and Lost Weapon Boxes:** Low-cost security cameras often produce blurry or noisy videos with compression artifacts. Standard tracking algorithms fail when suspects move quickly or get blocked by objects, causing the system to lose track of weapons and miss critical threat sequences [6].
 
 #### 1.3. Objectives
-The main goal of this project is to develop and evaluate **GUARDIAN**, an optimized real-time video analytics platform. Specifically, the project achieves the following milestones:
+The main goal of this project is to develop and evaluate **GUARDIAN**, an optimized near real-time video analytics platform. Specifically, the project achieves the following milestones:
 * **Develop a Spatial Threat Detector:** Train and export an optimized YOLOv8 ONNX model using a unified dataset of weapons (**Gun**, **Knife**) and human entities (**Suspect**), reaching mAP@0.5 > 85% on noisy surveillance feeds.
 * **Implement Zero-Lag Tracking:** Build an enhanced tracking state machine on top of **ByteTrack** [7] that prevents bounding box flicker and maintains constant track paths (MOTA > 80%) during multi-person interactions.
 * **Design a Lightweight Temporal Action Classifier:** Create a 12-dimensional feature vector (coordinates, velocities, and weapon proximity) and train a **1D-CNN** to classify sequences of **Normal**, **Shooting**, and **Violence** with F1-score > 85% over a 30-frame window.
-* **Achieve Real-Time Execution:** Implement a zero-dependency NumPy inference engine that, together with ONNX Runtime, runs the entire pipeline in under 25 ms per frame (>40 FPS) on standard hardware.
+* **Achieve Near Real-Time Execution:** Implement a zero-dependency NumPy inference engine that, together with ONNX Runtime, runs the entire pipeline in under 25 ms per frame (>40 FPS) on standard hardware.
 
 #### 1.4. Scope and Limitations
-* **Scope:** GUARDIAN focuses on real-time threat detection from fixed CCTV cameras. The system includes stream ingestion, backend FastAPI inference, PostgreSQL storage for cameras and alerts, and a web dashboard built with React 19 and Tailwind v4.
-* **Limitations:** The temporal action classifier recognizes three main states (**Normal**, **Shooting**, and **Violence**). Extremely crowded locations (with >100 overlapping people per frame) exceed the capacity of the real-time tracking system. Audio analysis and tracking people across different rooms are not covered in this project.
+* **Scope:** GUARDIAN focuses on near real-time threat detection from fixed CCTV cameras. The system includes stream ingestion, backend FastAPI inference, PostgreSQL storage for cameras and alerts, and a web dashboard built with React 19 and Tailwind v4.
+* **Limitations:** The temporal action classifier recognizes three main states (**Normal**, **Shooting**, and **Violence**). Extremely crowded locations (with >100 overlapping people per frame) exceed the capacity of the near real-time tracking system. Audio analysis and tracking people across different rooms are not covered in this project.
 
 #### 1.5. Methodology
 The project methodology follows an iterative development and testing process:
@@ -151,7 +151,7 @@ The project methodology follows an iterative development and testing process:
 Automated surveillance has improved significantly due to advances in deep neural networks, moving from manual feature design to automated spatial and temporal modeling.
 
 ##### 2.1.1. Spatial Object Detection: From Two-Stage to One-Stage Detectors
-Early deep learning detectors used two-stage networks like Faster R-CNN [8] that proposed regions before classifying them. While accurate, they are too slow for real-time monitoring on several CCTV streams. Single-stage YOLO (You Only Look Once) networks [9] solved this by treating object detection as a single regression problem. The latest iteration, **YOLOv8** [10], includes anchor-free detection heads and optimized loss functions. Studies show that YOLOv8 provides the best balance between accuracy and inference speed on local hardware [11], making it the ideal choice for spatial detection in GUARDIAN.
+Early deep learning detectors used two-stage networks like Faster R-CNN [8] that proposed regions before classifying them. While accurate, they are too slow for near real-time monitoring on several CCTV streams. Single-stage YOLO (You Only Look Once) networks [9] solved this by treating object detection as a single regression problem. The latest iteration, **YOLOv8** [10], includes anchor-free detection heads and optimized loss functions. Studies show that YOLOv8 provides the best balance between accuracy and inference speed on local hardware [11], making it the ideal choice for spatial detection in GUARDIAN.
 
 ##### 2.1.2. Tracking by Detection: ByteTrack and Identity Persistence
 In real video streams, identifying objects in single frames is not enough; the system must follow them over time. Traditional multi-object tracking (MOT) systems like SORT [12] and DeepSORT [13] use Kalman filters and spatial overlap (IoU) to connect boxes. However, they discard low-confidence detections caused by blur or temporary blocks, resulting in frequent track loss and ID changes. **ByteTrack** [7] solves this by matching *every* box—both high and low confidence—using a two-step matching strategy. This allows the system to follow blurry weapons and fast-moving suspects without needing heavy neural networks.
@@ -175,7 +175,7 @@ Training models requires realistic data. The **UCF-Crime** dataset [4] is a larg
 | Compute Overhead         | Very High (>100 GFLOP)| Medium           | Extremely Low   |
 | Training Parallelism     | Full (Volumetric)     | Sequential Only  | Full (Temporal) |
 | Runtime Dependencies     | Heavy GPU/Torch Run   | PyTorch Runtime  | Zero-Dep NumPy  |
-| Real-Time Viability      | Unfavorable           | Moderate         | Optimal         |
+| Near Real-Time Viability | Unfavorable           | Moderate         | Optimal         |
 +--------------------------+-----------------------+------------------+-----------------+
 ```
 
@@ -233,14 +233,14 @@ Figure 3.1: GUARDIAN End-to-End System Architecture Diagram
 
 *Note: Manually insert [main_page.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/frontend/frontend_definition/main_page.png) here. This screenshot displays the GUARDIAN security dashboard view, which contains the list of active cameras, connection state metrics, and alert panels.*
 
-*Note: Manually insert [camera_view.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/frontend/frontend_definition/camera_view.png) here. This screenshot displays the active live-stream viewport inside the dashboard, showcasing client-side SVG bounding boxes and real-time behavioral classifications (e.g. "Suspect (Violence)") overlayed on the video feed.*
+*Note: Manually insert [camera_view.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/frontend/frontend_definition/camera_view.png) here. This screenshot displays the active live-stream viewport inside the dashboard, showcasing client-side SVG bounding boxes and near real-time behavioral classifications (e.g. "Suspect (Violence)") overlayed on the video feed.*
 * **API Layer (Backend REST):** A FastAPI app that provides camera CRUD operations (`GET/POST/PUT/DELETE /api/cameras`), health checks (`/health`), and system stats (`/api/stats`) secured with role permissions.
 * **Streaming Layer (FastAPI WebSockets):** Low-latency communication uses standard WebSocket protocols:
   * `WS /producer/{stream_id}`: Receives raw binary frames from the video producer.
   * `WS /consumer/{stream_id}`: Broadcasts processed frames followed by JSON metadata to dashboards.
   * `GET /consumer/{stream_id}/frame`: Snapshot fallback for low-bandwidth environments.
 * **Inference Layer:** Frames are decoded, run through the YOLOv8 model via ONNX Runtime, smoothed with a tracking state machine (`tracker.py`), compiled into 30-frame buffers (`temporal_action.py`), and classified by the NumPy 1D-CNN.
-* **Deployment & Proxy:** Containerized with Docker. Nginx serves the compiled frontend and proxies API, WebSocket, and health requests to the FastAPI backend. Dozzle runs on port `9999` to display real-time logs and system performance.
+* **Deployment & Proxy:** Containerized with Docker. Nginx serves the compiled frontend and proxies API, WebSocket, and health requests to the FastAPI backend. Dozzle runs on port `9999` to display near real-time logs and system performance.
 
 ---
 
@@ -291,7 +291,7 @@ Figure 3.2: PostgreSQL Database Schema and Entity-Relationship Diagram
  | last_active      | TIMESTAMP WITH TZ     | NOT NULL, DEFAULT NOW()              |
  +------------------+-----------------------+--------------------------------------+
                                       |
-                                      | (1 : N) Real-Time Threat Events
+                                      | (1 : N) Near Real-Time Threat Events
                                       \/
  +---------------------------------------------------------------------------------+
  |                           TABLE: guardian_alert_logs                            |
@@ -728,14 +728,14 @@ Figure 4.4: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
       +--------------------------------+---------------+---------------+---------------+
 ```
 
-*Note: Manually insert [current_metrics.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/current_metrics.png) or [expected_metrics.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/expected_metrics.png) here. This plot displays the real-time processing throughput, frame latency variations, and CPU/GPU memory usage during live local inference.*
+*Note: Manually insert [current_metrics.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/current_metrics.png) or [expected_metrics.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/expected_metrics.png) here. This plot displays the near real-time processing throughput, frame latency variations, and CPU/GPU memory usage during live local inference.*
 
 ---
 
 ### 5. Conclusion and Future Work
 
 #### 5.1. Conclusion
-This project designed, implemented, and validated **GUARDIAN**, an optimized real-time video analytics platform for threat detection. By combining YOLOv8 spatial detection, a zero-lag ByteTrack state machine, and a zero-dependency 1D-CNN action classifier, GUARDIAN solves the limitations of single-frame security monitoring. The system reaches 89.4% single-frame mAP@0.5 on weapons and an 88.7% F1-score on actions, processing frames in 17.6 ms (56 FPS) on standard hardware. This demonstrates that structured 1D spatial-kinetic-proximity vectors are a faster, lighter alternative to volumetric 3D-CNNs and recurrent networks.
+This project designed, implemented, and validated **GUARDIAN**, an optimized near real-time video analytics platform for threat detection. By combining YOLOv8 spatial detection, a zero-lag ByteTrack state machine, and a zero-dependency 1D-CNN action classifier, GUARDIAN solves the limitations of single-frame security monitoring. The system reaches 89.4% single-frame mAP@0.5 on weapons and an 88.7% F1-score on actions, processing frames in 17.6 ms (56 FPS) on standard hardware. This demonstrates that structured 1D spatial-kinetic-proximity vectors are a faster, lighter alternative to volumetric 3D-CNNs and recurrent networks.
 
 #### 5.2. Future Work
 We suggest three paths for future research and deployment:
@@ -838,7 +838,7 @@ docker compose -f docker-compose.yml ps
 ```
 
 * **Frontend Security Dashboard:** Access `http://localhost` (or `https://localhost` with auto-TLS).
-* **Dozzle Real-Time Log & Latency Telemetry:** Access `http://localhost:9999` to monitor live streaming FPS, process latency, and inference logs.
+* **Dozzle Near Real-Time Log & Latency Telemetry:** Access `http://localhost:9999` to monitor live streaming FPS, process latency, and inference logs.
 
 #### A.3. Local Development Quickstart
 For iterative debugging and frontend component development:
