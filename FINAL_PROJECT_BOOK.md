@@ -325,7 +325,7 @@ Figure 3.3: Three-Stage Hierarchical Detection, Tracking, and Temporal Action Pi
  | STAGE 1: SPATIAL THREAT LOCALIZATION (YOLOv8 ONNX Runtime)                      |
  |                                                                                 |
  |  Input: 640x640x3 BGR Frame                                                     |
- |  Output Tensor: [Batch=1, Channels=6, Anchors=8400]                             |
+ |  Output Tensor: [Batch=1, Channels=7, Anchors=8400]                             |
  |  Parse: Coordinates (cx, cy, w, h) -> BBox (x1, y1, x2, y2)                     |
  |  Confidence Filter: Score >= 0.35 (Gun [0], Knife [1], Suspect [2])             |
  +---------------------------------------------------------------------------------+
@@ -344,7 +344,7 @@ Figure 3.3: Three-Stage Hierarchical Detection, Tracking, and Temporal Action Pi
  | STAGE 3: TEMPORAL ACTION CLASSIFICATION (1D-CNN over 30-Frame History)          |
  |                                                                                 |
  |  TemporalFeatureExtractor: Builds 12D Spatio-Kinetic-Proximity Vector per step  |
- |  NumPyCNNClassifier (Zero-Dependency Runtime):                             |
+ |  NumPyCNNClassifier (Zero-Dependency Runtime):                                  |
  |     -> Conv1D_Same (in=12, hidden=32, k=5) + ReLU                               |
  |     -> Conv1D_Same (in=32, hidden=32, k=5) + ReLU                               |
  |     -> Global Average Pooling (t=30 -> 1)                                       |
@@ -753,10 +753,12 @@ Figure 4.4: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
 This project designed, implemented, and validated **GUARDIAN**, an optimized near real-time video analytics platform for threat detection. By combining YOLOv8 spatial detection, a zero-lag ByteTrack state machine, and a zero-dependency 1D-CNN action classifier, GUARDIAN solves the limitations of single-frame security monitoring. The system reaches 89.4% single-frame mAP@0.5 on weapons and an 88.7% F1-score on actions, processing frames in 17.6 ms (56 FPS) on standard hardware. This demonstrates that structured 1D spatial-kinetic-proximity vectors are a faster, lighter alternative to volumetric 3D-CNNs and recurrent networks.
 
 #### 5.2. Future Work
-We suggest three paths for future research and deployment:
+We suggest four paths for future research and deployment:
 1. **Temporal Transformers:** While 1D-CNNs model local 5-frame kinetics well, replacing the convolutions with a lightweight Temporal Transformer [16] could analyze longer windows (T > 120 frames) to recognize slow suspicious activities like loitering.
 2. **Multi-Camera Re-Identification (ReID):** Adding a lightweight ReID embedding module to the ByteTrack system would enable tracking suspect identities across different cameras in large facilities.
 3. **TensorRT Optimization:** Compiling the YOLOv8 and 1D-CNN weights into INT8 precision using NVIDIA TensorRT would reduce latency below 8 ms per frame, enabling execution on low-cost devices like the NVIDIA Jetson Orin Nano embedded boards.
+4. **Decoupled Inference Microservice Architecture:** Currently, the deep learning ONNX models (YOLOv8 custom and person detectors) and the 1D-CNN classifier run inside the main FastAPI application process. Under heavy stream loads, this creates resource contention between network I/O (handling WebSockets, HTTP REST requests, database connection pools) and compute-heavy matrix multiplications, increasing latency. Separating the model inference pipeline into a dedicated, independent microservice (e.g., using Triton Inference Server or BentoML) connected via a high-performance message queue (like Redis or RabbitMQ) would allow independent scaling of the web API (scale-out) and the model inference workers (scale-up), maximizing resource utilization and guaranteeing stable near real-time performance.
+
 
 ---
 
