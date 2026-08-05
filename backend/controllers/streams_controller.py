@@ -34,6 +34,11 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
     await websocket.accept()
     client_host = websocket.client.host if websocket.client else "unknown"
     logger.info("stream.producer.connected stream_id=%s client=%s", stream_id, client_host)
+
+    # Always start a new producer session with a completely clean tracking state.
+    remove_byte_tracker(stream_id)
+    remove_feature_extractor(stream_id)
+
     detector = det_state.detector
     if detector is None:
         logger.error("stream.producer.reject stream_id=%s reason=model_not_loaded", stream_id)
