@@ -23,11 +23,15 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
   const expectJsonRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // 2. Animation Frame Synchronization (Canvas replacing DOM overlays)
+  // Canvas rendering synchronization refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgDimRef = useRef({ naturalWidth: 0, naturalHeight: 0 });
   const clientDimRef = useRef({ width: 0, height: 0 });
   const lastMetaRef = useRef<StreamTrackPayload | null>(null);
+  
+  // Track synchronization refs to fix async image decoding delays (ghosting)
+  const metaCacheRef = useRef<Record<string, StreamTrackPayload>>({});
+  const loadedImgSrcRef = useRef<string | null>(null);
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const target = e.target as HTMLImageElement;
@@ -35,6 +39,16 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
       naturalWidth: target.naturalWidth,
       naturalHeight: target.naturalHeight
     };
+    
+    // Exact synchronization: ONLY apply the detection payload when the corresponding image actually finishes decoding and paints
+    const loadedSrc = target.src;
+    loadedImgSrcRef.current = loadedSrc;
+    const metaForThisImage = metaCacheRef.current[loadedSrc];
+    
+    if (metaForThisImage) {
+        setLastMeta(metaForThisImage);
+        lastMetaRef.current = metaForThisImage;
+    }
   };
 
   useEffect(() => {
@@ -80,15 +94,20 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
       setStatus('live');
       setLastMeta(null);
       lastMetaRef.current = null;
+      loadedImgSrcRef.current = null;
+      metaCacheRef.current = {};
     };
 
     ws.onmessage = (ev: MessageEvent<Blob | string>) => {
       if (typeof ev.data !== 'string') {
         if (blobUrlRef.current) {
+          // Cleanup old cached payload to prevent memory leaks
+          delete metaCacheRef.current[blobUrlRef.current];
           URL.revokeObjectURL(blobUrlRef.current);
         }
-        blobUrlRef.current = URL.createObjectURL(ev.data);
-        setImgSrc(blobUrlRef.current);
+        const newUrl = URL.createObjectURL(ev.data);
+        blobUrlRef.current = newUrl;
+        setImgSrc(newUrl);
         expectJsonRef.current = true;
         return;
       }
@@ -99,15 +118,22 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
       try {
         const parsed = JSON.parse(ev.data) as StreamTrackPayload;
         
-        // 1. Explicit Empty-Frame Reset & 3. Immutability & Object Equality
+        let freshMeta;
         if (!parsed.tracks || parsed.tracks.length === 0) {
-          const emptyMeta = { ...parsed, tracks: [] };
-          setLastMeta(emptyMeta);
-          lastMetaRef.current = emptyMeta;
+          freshMeta = { ...parsed, tracks: [] };
         } else {
-          const freshMeta = { ...parsed, tracks: [...parsed.tracks] };
-          setLastMeta(freshMeta);
-          lastMetaRef.current = freshMeta;
+          freshMeta = { ...parsed, tracks: [...parsed.tracks] };
+        }
+        
+        if (blobUrlRef.current) {
+           // Queue the payload for when the image finishes loading
+           metaCacheRef.current[blobUrlRef.current] = freshMeta;
+           
+           // Race condition safeguard: if the image loaded instantly before this JSON arrived, apply it immediately
+           if (loadedImgSrcRef.current === blobUrlRef.current) {
+               setLastMeta(freshMeta);
+               lastMetaRef.current = freshMeta;
+           }
         }
       } catch {
         /* ignore malformed */
@@ -128,12 +154,14 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
       ws.close();
       wsRef.current = null;
       if (blobUrlRef.current) {
+        delete metaCacheRef.current[blobUrlRef.current];
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
       }
       setImgSrc(null);
       setLastMeta(null);
       lastMetaRef.current = null;
+      loadedImgSrcRef.current = null;
     };
   }, [streamId, consumerBackendOrigin]);
 
