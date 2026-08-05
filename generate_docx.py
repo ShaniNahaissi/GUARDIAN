@@ -27,12 +27,21 @@ def add_styled_paragraph(doc, text, style='Normal', space_after=6, line_spacing=
     p.paragraph_format.space_after = Pt(space_after)
     p.paragraph_format.line_spacing = line_spacing
     
-    # Simple inline bold parsing: **text**
-    parts = re.split(r'(\*\*.*?\*\*)', text)
+    # Robust inline formatting: **bold**, *italic*, `code`
+    pattern = re.compile(r'(\*\*.*?\*\*|\*.*?\*|`.*?`)')
+    parts = pattern.split(text)
     for part in parts:
         if part.startswith('**') and part.endswith('**'):
             run = p.add_run(part[2:-2])
             run.bold = True
+        elif part.startswith('*') and part.endswith('*'):
+            run = p.add_run(part[1:-1])
+            run.italic = True
+        elif part.startswith('`') and part.endswith('`'):
+            run = p.add_run(part[1:-1])
+            run.font.name = 'Consolas'
+            run.font.size = Pt(9.5)
+            run.font.color.rgb = RGBColor(0x7F, 0x1D, 0x1D)
         else:
             p.add_run(part)
     return p
@@ -106,11 +115,19 @@ def convert_md_to_docx(md_path, output_docx_path):
                         p.paragraph_format.space_after = Pt(2)
                         p.paragraph_format.space_before = Pt(2)
                         
-                        parts = re.split(r'(\*\*.*?\*\*)', text)
+                        pattern = re.compile(r'(\*\*.*?\*\*|\*.*?\*|`.*?`)')
+                        parts = pattern.split(text)
                         for part in parts:
                             if part.startswith('**') and part.endswith('**'):
                                 run = p.add_run(part[2:-2])
                                 run.bold = True
+                            elif part.startswith('*') and part.endswith('*'):
+                                run = p.add_run(part[1:-1])
+                                run.italic = True
+                            elif part.startswith('`') and part.endswith('`'):
+                                run = p.add_run(part[1:-1])
+                                run.font.name = 'Consolas'
+                                run.font.size = Pt(9.0)
                             else:
                                 p.add_run(part)
                                 

@@ -28,7 +28,7 @@ DATE:        August 2026
 
 Surveillance systems operating in near real-time face a major practical challenge: while modern security setups generate massive amounts of continuous closed-circuit television (CCTV) video, traditional automated monitoring tools analyze frames individually. This lack of time-based context leads to frequent false alarms and limits their usefulness. This project introduces **GUARDIAN**, a near real-time threat and behavioral detection platform designed for intelligent video surveillance. GUARDIAN connects spatial object detection and temporal action recognition using a three-stage pipeline: (1) fast object detection using a highly-optimized YOLOv8 model in ONNX format to find threats in single frames (**Gun**, **Knife**, and **Suspect**); (2) stable multi-object tracking through a custom state machine based on **ByteTrack**, which keeps track of individuals even when they are temporarily blocked or hidden; and (3) sequence-level action recognition using a lightweight **1D Convolutional Neural Network (1D-CNN)** that analyzes 12-dimensional features (movement, position, and proximity to weapons) over a rolling 30-frame window.
 
-Our approach combines data from different weapon and CCTV datasets (including Kaggle, Roboflow, and **UCF-Crime**) and applies realistic distortions like motion blur, camera noise, perspective warp, and partial blockages (cutouts) during training. To run the system as close to real-time as possible without heavy deep learning frameworks on local servers, we exported the trained PyTorch 1D-CNN weights to a fast, zero-dependency NumPy inference engine. Testing shows that GUARDIAN reaches an 89.4% mean Average Precision (mAP@0.5) for weapon detection and an 88.7% F1-score for classifying behaviors (**Normal**, **Shooting**, **Violence**). The system processes video frames in under 22 ms (>45 frames per second) on standard hardware. This is faster and more stable than recurrent neural networks, while also reducing false alarms in crowded surveillance scenes.
+Our approach combines data from different weapon and CCTV datasets (including Kaggle, Roboflow, and **UCF-Crime**) and applies realistic distortions like motion blur, camera noise, perspective warp, and partial blockages (cutouts) during training. To run the system as close to real-time as possible without heavy deep learning frameworks on local servers, we exported the trained PyTorch 1D-CNN weights to a fast, zero-dependency NumPy inference engine. This engine replaces heavy deep learning framework dependencies with lightweight matrix operations written directly in standard Python and NumPy. Testing shows that GUARDIAN reaches an 89.4% mean Average Precision (mAP@0.5) for weapon detection and an 88.7% F1-score for classifying behaviors (**Normal**, **Shooting**, **Violence**). The system processes video frames in under 22 ms (>45 frames per second) on standard hardware. This is faster and more stable than recurrent neural networks, while also reducing false alarms in crowded surveillance scenes.
 
 ---
 
@@ -64,30 +64,18 @@ Our approach combines data from different weapon and CCTV datasets (including Ka
 
 | Abbreviation | Full Term |
 | :--- | :--- |
-| **API** | Application Programming Interface |
 | **BPTT** | Backpropagation Through Time |
-| **CCTV** | Closed-Circuit Television |
 | **CNN** | Convolutional Neural Network |
-| **CRUD** | Create, Read, Update, Delete |
-| **DL** | Deep Learning |
-| **FPS** | Frames Per Second |
-| **GPU** | Graphics Processing Unit |
 | **GRU** | Gated Recurrent Unit |
 | **IoU** | Intersection over Union |
-| **JSON** | JavaScript Object Notation |
-| **LAN** | Local Area Network |
 | **LSTM** | Long Short-Term Memory |
 | **mAP** | Mean Average Precision |
 | **ONNX** | Open Neural Network Exchange |
-| **REST** | Representational State Transfer |
 | **ReLU** | Rectified Linear Unit |
 | **ROC** | Receiver Operating Characteristic |
-| **ROP** | Return-Oriented Programming |
 | **SORT** | Simple Online and Realtime Tracking |
 | **T-IoU** | Temporal Intersection over Union |
 | **UCF** | University of Central Florida |
-| **VRAM** | Video Random Access Memory |
-| **WS** | WebSocket |
 
 ---
 
@@ -359,14 +347,14 @@ Figure 3.3: Three-Stage Hierarchical Detection, Tracking, and Temporal Action Pi
  +---------------------------------------------------------------------------------+
 ```
 
-##### 3.3.1. Stage 1: Spatial Threat Detection via YOLOv8 ONNX Engine
-To keep latency under 10ms on standard hardware, the spatial detector (`yolo.py`) runs the YOLOv8 model in ONNX format:
-* **Input Normalization:** BGR video frames are resized to 640x640, converted to RGB, normalized to the range [0.0, 1.0], and formatted as a float32 tensor (1 x 3 x 640 x 640).
-* **Output Parsing:** YOLOv8 outputs class probabilities starting directly at tensor index 4. The output tensor has shape (1, 6, 8400), containing 4 coordinates (cx, cy, w, h) and 2 class scores (`Gun` and `Knife`).
+##### 3.3.1. Stage 1: Integrated Dual-Model Spatial Threat Detection
+To keep latency under 10ms on standard hardware, the spatial threat detector operates a dual-detector pipeline consisting of a pretrained Person detector model running in tandem with our custom-trained YOLOv8 model:
+* **Preprocessed Input Normalization:** For both models, BGR video frames are resized to 640x640, converted to RGB, normalized to the range [0.0, 1.0], and formatted as a float32 tensor (1 x 3 x 640 x 640).
+* **Output Parsing:** The custom YOLOv8 output tensor has shape (1, 7, 8400), containing 4 coordinates (cx, cy, w, h) and 3 class scores (`Gun`, `Knife`, and `Suspect`). The pretrained COCO model detects the `person` class (0).
+* **Remapping and Cross-Model NMS:** The custom model's weapon detections (0: `Gun`, 1: `Knife`) and `Suspect` detections (2) are merged with the remapped `person` (remapped to `Suspect` [2]) detections from the pretrained model. Overlapping suspect bounding boxes from both models are de-duplicated using cross-model Non-Maximum Suppression (NMS) via OpenCV (`cv2.dnn.NMSBoxes`) with an IoU threshold of 0.50.
 * **Coordinate Conversion:** Central coordinates are converted to pixel locations:
   x1 = (cx - 0.5*w) * scale_x,   y1 = (cy - 0.5*h) * scale_y
   x2 = (cx + 0.5*w) * scale_x,   y2 = (cy + 0.5*h) * scale_y
-* **Non-Maximum Suppression (NMS):** Overlapping boxes are removed using NMS with an IoU threshold of 0.45 and confidence threshold of 0.35.
 
 ```python
 # Code Snippet 3.1: YOLOv8 ONNX Post-Processing & NMS Decoding (yolo.py)
