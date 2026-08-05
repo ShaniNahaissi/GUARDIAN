@@ -502,7 +502,7 @@ export const AdminMetricsDashboard: React.FC = () => {
       </Card>
 
       {/* Summary KPI grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <Card className="p-4 sm:p-5 flex items-center gap-4 bg-gray-900/40">
           <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl shrink-0">
             <Database className="w-6 h-6" />
