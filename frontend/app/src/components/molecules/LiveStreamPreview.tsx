@@ -287,9 +287,11 @@ export const LiveStreamPreview: React.FC<LiveStreamPreviewProps> = ({
         const textWidth = textMetrics.width;
         
         ctx.fillStyle = color;
-        ctx.fillRect(clampedLeft, clampedTop - 20, textWidth + 8, 20);
+        // Render label background INSIDE the top-left corner of the bounding box
+        ctx.fillRect(clampedLeft, clampedTop, textWidth + 8, 20);
         ctx.fillStyle = "#ffffff";
-        ctx.fillText(text, clampedLeft + 4, clampedTop - 5);
+        // Adjust text baseline to sit properly inside the new background
+        ctx.fillText(text, clampedLeft + 4, clampedTop + 14);
       });
     };
     
