@@ -236,63 +236,69 @@ Figure 3.1: GUARDIAN End-to-End System Architecture Diagram
 
 ##### 3.2.1. Datasets and Data Harmonization
 GUARDIAN combines two primary data sources:
-1. **Spatial Threat Dataset:** We merged weapon datasets from Kaggle and Roboflow and filtered out unrelated labels, mapping them to:
-   * **Class 0 (`Gun`):** Pistols, firearms, and rifles.
-   * **Class 1 (`Knife`):** Edged weapons and knives.
-   * **Class 2 (`Suspect`):** Tracked human bounding boxes.
-2. **Temporal Action Dataset (UCF-Crime):** Video sequences of armed robbery, assault, and normal behavior were processed through our tracking pipeline to extract 12-dimensional vectors for each person over 30 frames. The dataset contains:
-   * **Class 0 (`Normal`):** Benign public behavior.
-   * **Class 1 (`Shooting`):** Shooting stances and firearm recoil.
-   * **Class 2 (`Violence`):** Fighting, pushing, and aggressive movement.
+1. **Spatial Threat Dataset:** We merged weapon datasets from Kaggle and Roboflow and filtered out unrelated labels, mapping them to class 0 (`Gun`), class 1 (`Knife`), and class 2 (`Suspect`) inside our custom YOLOv8 model. The spatial coordinates are augmented using standard COCO person detections.
+2. **Temporal Action Dataset (UCF-Crime):** Video sequences of armed robbery, assault, and normal behavior were processed through our tracking pipeline to extract 12-dimensional vectors for each person over a 30-frame window. The target classes are defined as class 0 (`Normal`), class 1 (`Shooting`), and class 2 (`Violence`).
 
 ##### 3.2.2. Relational Database Schema
-To support persistent camera setups, threat logs, and system metrics, GUARDIAN uses PostgreSQL with SQLAlchemy.
+To support persistent camera configurations, frame-level latency profiles, and behavioral sequence metrics, GUARDIAN uses a PostgreSQL database mapped via SQLAlchemy.
 
 ```
 Figure 3.2: PostgreSQL Database Schema and Entity-Relationship Diagram
 
- +---------------------------------------------------------------------------------+
- |                              TABLE: guardian_users                              |
- +------------------+-----------------------+--------------------------------------+
- | Column           | Type                  | Attributes / Constraints             |
- +------------------+-----------------------+--------------------------------------+
- | id               | UUID                  | PRIMARY KEY, DEFAULT gen_random_uuid |
- | username         | VARCHAR(64)           | UNIQUE, NOT NULL                     |
- | password_hash    | VARCHAR(256)          | NOT NULL                             |
- | role             | VARCHAR(32)           | NOT NULL, DEFAULT 'viewer'           |
- | created_at       | TIMESTAMP WITH TZ     | NOT NULL, DEFAULT NOW()              |
- +------------------+-----------------------+--------------------------------------+
-                                      |
-                                      | (1 : N) Audit & Camera Control
-                                      \/
- +---------------------------------------------------------------------------------+
- |                             TABLE: guardian_cameras                             |
- +------------------+-----------------------+--------------------------------------+
- | Column           | Type                  | Attributes / Constraints             |
- +------------------+-----------------------+--------------------------------------+
- | id               | VARCHAR(64)           | PRIMARY KEY (Stream UUID / CAM-ID)   |
- | name             | VARCHAR(128)          | NOT NULL                             |
- | location         | VARCHAR(256)          | NOT NULL, DEFAULT ''                 |
- | status           | VARCHAR(32)           | NOT NULL, DEFAULT 'normal'           |
- | status_text      | VARCHAR(64)           | NOT NULL, DEFAULT 'NORMAL'           |
- | image_url        | TEXT                  | DEFAULT ''                           |
- | last_active      | TIMESTAMP WITH TZ     | NOT NULL, DEFAULT NOW()              |
- +------------------+-----------------------+--------------------------------------+
-                                      |
-                                      | (1 : N) Near Real-Time Threat Events
-                                      \/
- +---------------------------------------------------------------------------------+
- |                           TABLE: guardian_alert_logs                            |
- +------------------+-----------------------+--------------------------------------+
- | Column           | Type                  | Attributes / Constraints             |
- +------------------+-----------------------+--------------------------------------+
- | alert_id         | UUID                  | PRIMARY KEY                          |
- | camera_id        | VARCHAR(64)           | FOREIGN KEY REFERENCES cameras(id)   |
- | threat_class     | VARCHAR(32)           | NOT NULL ('Gun', 'Knife', 'Violence')|
- | confidence       | FLOAT                 | NOT NULL                             |
- | frame_sequence   | INTEGER               | NOT NULL                             |
- | timestamp        | TIMESTAMP WITH TZ     | NOT NULL, DEFAULT NOW()              |
- +------------------+-----------------------+--------------------------------------+
+  +---------------------------------------------------------------------------------+
+  |                              TABLE: users                                       |
+  +------------------+-----------------------+--------------------------------------+
+  | Column           | Type                  | Attributes / Constraints             |
+  +------------------+-----------------------+--------------------------------------+
+  | id               | UUID                  | PRIMARY KEY, DEFAULT gen_random_uuid |
+  | username         | VARCHAR(64)           | UNIQUE, NOT NULL, INDEX              |
+  | full_name        | VARCHAR(256)          | NOT NULL, DEFAULT ''                 |
+  | password_hash    | VARCHAR(128)          | NOT NULL                             |
+  | role             | VARCHAR(32)           | NOT NULL, DEFAULT 'viewer'           |
+  | created_at       | TIMESTAMP WITH TZ     | NOT NULL, DEFAULT NOW()              |
+  +------------------+-----------------------+--------------------------------------+
+                                       |
+                                       | (1 : N) Audit & Camera Control
+                                       \/
+  +---------------------------------------------------------------------------------+
+  |                             TABLE: cameras                                      |
+  +------------------+-----------------------+--------------------------------------+
+  | Column           | Type                  | Attributes / Constraints             |
+  +------------------+-----------------------+--------------------------------------+
+  | id               | VARCHAR(64)           | PRIMARY KEY (Stream UUID / CAM-ID)   |
+  | name             | VARCHAR(256)          | NOT NULL                             |
+  | location         | VARCHAR(256)          | NOT NULL, DEFAULT ''                 |
+  | status           | VARCHAR(32)           | NOT NULL, DEFAULT 'normal'           |
+  | statusText       | VARCHAR(32)           | NOT NULL, DEFAULT 'NORMAL'           |
+  | imageUrl         | VARCHAR(1024)         | NOT NULL, DEFAULT ''                 |
+  | time             | VARCHAR(64)           | NOT NULL, DEFAULT ''                 |
+  +------------------+-----------------------+--------------------------------------+
+                                       |
+                                       +-----------------------+
+                                       |                       |
+                                       | (1 : N)               | (1 : N)
+                                       \/                      \/
+  +--------------------------------------------+  +--------------------------------------------+
+  |            TABLE: frame_metrics            |  |          TABLE: sequence_metrics           |
+  +------------------+-----------------+-------+  +------------------+-----------------+-------+
+  | Column           | Type            | Attr  |  | Column           | Type            | Attr  |
+  +------------------+-----------------+-------+  +------------------+-----------------+-------+
+  | id               | UUID            | PKEY  |  | id               | UUID            | PKEY  |
+  | stream_id        | VARCHAR(64)     | INDEX |  | stream_id        | VARCHAR(64)     | INDEX |
+  | frame_seq        | INTEGER         | INDEX |  | track_id         | INTEGER         | INDEX |
+  | timestamp        | TIMESTAMP TZ    | INDEX |  | start_frame_seq  | INTEGER         |       |
+  | total_latency_ms | FLOAT           |       |  | end_frame_seq    | INTEGER         |       |
+  | yolo_latency_ms  | FLOAT           |       |  | timestamp        | TIMESTAMP TZ    | INDEX |
+  | person_latency_ms| FLOAT           |       |  | action_label     | VARCHAR(64)     |       |
+  | action_latency_ms| FLOAT           |       |  | action_confidence| FLOAT           |       |
+  | detections_count | INTEGER         |       |  | best_frame_seq   | INTEGER         |       |
+  | track_count      | INTEGER         |       |  | best_frame_score | FLOAT           |       |
+  | detections_json  | JSON            |       |  | avg_total_lat_ms | FLOAT           |       |
+  | cpu_utilization  | FLOAT           |       |  | avg_yolo_lat_ms  | FLOAT           |       |
+  | gpu_vram_used    | INTEGER         |       |  | avg_person_lat_ms| FLOAT           |       |
+  |                  |                 |       |  | avg_action_lat_ms| FLOAT           |       |
+  |                  |                 |       |  | frame_count      | INTEGER         |       |
+  +------------------+-----------------+-------+  +------------------+-----------------+-------+
 ```
 
 ##### 3.2.3. Handling Class Imbalance and Data Sparsity
@@ -377,6 +383,27 @@ for row in preds:
     class_ids.append(cls_id)
 # Perform Non-Maximum Suppression
 indices = cv2.dnn.NMSBoxes(boxes, scores, self.conf_threshold, self.iou_threshold)
+```
+
+```python
+# Code Snippet 3.1b: Dual-Model Ingestion & Cross-Model NMS (pipeline.py)
+def merge_detections(weapon_dets, person_dets, suspect_label):
+    weapons = [d for d in weapon_dets if d.class_id in (0, 1)]
+    suspects = [d for d in weapon_dets if d.class_id == 2]
+    # Remap COCO person class (0) to Suspect class (2)
+    suspects += [
+        Detection(xyxy=d.xyxy, score=d.score, label=suspect_label, class_id=2)
+        for d in person_dets if d.class_id == 0
+    ]
+    if len(suspects) > 1:
+        boxes = [[x1, y1, x2 - x1, y2 - y1] for (x1, y1, x2, y2) in (d.xyxy for d in suspects)]
+        scores = [d.score for d in suspects]
+        # Cross-model NMS de-duplicates suspect entries from both detectors
+        keep = cv2.dnn.NMSBoxes(boxes, scores, 0.0, 0.50)
+        if keep is not None and len(keep) > 0:
+            keep_idxs = np.asarray(keep).flatten()
+            suspects = [suspects[int(i)] for i in keep_idxs]
+    return weapons + suspects
 ```
 
 ##### 3.3.2. Stage 2: Zero-Lag Tracking State Machine (ByteTrack)
