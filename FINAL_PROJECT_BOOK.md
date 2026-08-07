@@ -228,7 +228,7 @@ Figure 3.1: GUARDIAN End-to-End System Architecture Diagram
   * `WS /consumer/{stream_id}`: Broadcasts processed frames followed by JSON metadata to dashboards.
   * `GET /consumer/{stream_id}/frame`: Snapshot fallback for low-bandwidth environments.
 * **Inference Layer:** Frames are decoded, run through the YOLOv8 model via ONNX Runtime, smoothed with a tracking state machine (`tracker.py`), compiled into 30-frame buffers (`temporal_action.py`), and classified by the NumPy 1D-CNN.
-* **Deployment & Proxy:** Containerized with Docker. Nginx serves the compiled frontend and proxies API, WebSocket, and health requests to the FastAPI backend. Dozzle runs on port `9999` to display near real-time logs and system performance.
+* **Deployment & Proxy:** Containerized with Docker. Nginx serves the compiled frontend and proxies API, WebSocket, and health requests to the FastAPI backend.
 
 ---
 
@@ -837,7 +837,7 @@ This appendix provides technical instructions for compiling, testing, and deploy
 * **Node.js Environment:** Node.js v20.11+ and npm v10.0+ (for local frontend development).
 
 #### A.2. Production Deployment (Docker Compose)
-To deploy the complete production stack (PostgreSQL database, FastAPI backend with TLS, Nginx SSL frontend proxy, and Dozzle log dashboard):
+To deploy the complete production stack (PostgreSQL database, FastAPI backend with TLS, and Nginx SSL frontend proxy):
 
 ```bash
 # 1. Clone the repository and navigate to the project root
@@ -855,7 +855,6 @@ docker compose -f docker-compose.yml ps
 ```
 
 * **Frontend Security Dashboard:** Access `http://localhost` (or `https://localhost` with auto-TLS).
-* **Dozzle Near Real-Time Log & Latency Telemetry:** Access `http://localhost:9999` to monitor live streaming FPS, process latency, and inference logs.
 
 #### A.3. Local Development Quickstart
 For iterative debugging and frontend component development:

@@ -67,14 +67,5 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  dozzle:
-    image: amir20/dozzle:latest
-    container_name: guardian-logs-ui
-    ports:
-      - "9999:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: unless-stopped
-
 volumes:
   guardian_pg_data:
