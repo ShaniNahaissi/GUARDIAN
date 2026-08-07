@@ -108,7 +108,7 @@ Current automated video surveillance systems face three major technical challeng
 The main goal of this project is to develop and evaluate **GUARDIAN**, an optimized near real-time video analytics platform. Specifically, the project achieves the following milestones:
 * **Develop a Spatial Threat Detector:** Train and export an optimized YOLOv8 ONNX model using a unified dataset of weapons (**Gun**, **Knife**) and human entities (**Suspect**), reaching mAP@0.5 > 85% on noisy surveillance feeds.
 * **Implement Zero-Lag Tracking:** Build an enhanced tracking state machine on top of **ByteTrack** [7] that prevents bounding box flicker and maintains constant track paths (MOTA > 80%) during multi-person interactions.
-* **Design a Lightweight Temporal Action Classifier:** Create a 12-dimensional feature vector (coordinates, velocities, and weapon proximity) and train a **1D-CNN** to classify sequences of **Normal**, **Shooting**, and **Violence** with F1-score > 85% over a 30-frame window.
+* **Design a Lightweight Temporal Action Classifier:** Create a 12-dimensional feature vector (coordinates, velocities, and weapon proximity) and train a **1D-CNN** to classify sequences of **Normal**, **Shooting**, and **Violence** with high accuracy (reaching up to 79.6% F1-score on violent actions and 73.7% overall test accuracy) over a 30-frame window.
 * **Achieve Near Real-Time Execution:** Implement a zero-dependency NumPy inference engine that, together with ONNX Runtime, runs the entire pipeline in under 25 ms per frame (>40 FPS) on standard hardware.
 
 #### 1.4. Scope and Limitations
@@ -293,10 +293,10 @@ Figure 3.2: PostgreSQL Database Schema and Entity-Relationship Diagram
   | action_latency_ms| FLOAT           |       |  | action_confidence| FLOAT           |       |
   | detections_count | INTEGER         |       |  | best_frame_seq   | INTEGER         |       |
   | track_count      | INTEGER         |       |  | best_frame_score | FLOAT           |       |
-  | detections_json  | JSON            |       |  | avg_total_lat_ms | FLOAT           |       |
-  | cpu_utilization  | FLOAT           |       |  | avg_yolo_lat_ms  | FLOAT           |       |
-  | gpu_vram_used    | INTEGER         |       |  | avg_person_lat_ms| FLOAT           |       |
-  |                  |                 |       |  | avg_action_lat_ms| FLOAT           |       |
+  | detections_json  | JSON            |       |  | avg_total_latency_ms| FLOAT           |       |
+  | cpu_utilization  | FLOAT           |       |  | avg_yolo_latency_ms | FLOAT           |       |
+  | gpu_vram_used    | INTEGER         |       |  | avg_person_latency_ms| FLOAT          |       |
+  |                  |                 |       |  | avg_action_latency_ms| FLOAT          |       |
   |                  |                 |       |  | frame_count      | INTEGER         |       |
   +------------------+-----------------+-------+  +------------------+-----------------+-------+
 ```
@@ -411,7 +411,7 @@ Raw detection boxes can jitter or drop during fast camera movements. GUARDIAN wr
 * **Hierarchical Matching:** Detections are split into high and low confidence groups. High confidence boxes are matched first using Kalman filter predictions and IoU distance. Unmatched tracks are then matched with low confidence boxes, recovering blurred or occluded weapons.
 * **Instant Bounding Box Smoothing:** Traditional trackers wait for a box to appear across multiple frames before starting a track, causing a lag in the UI. GUARDIAN displays new tracks immediately if confidence is > 0.55, and applies exponential moving average (EMA) coordinate smoothing (alpha = 0.70) to prevent coordinate jitter:
   b_smooth(t) = alpha * b_raw(t) + (1 - alpha) * b_smooth(t-1)
-* **Ghost Weapon Retention:** If a weapon is temporarily blocked or drops out, the system keeps its bounding box active for up to 30 frames to maintain a stable threat status.
+* **Ghost Weapon Retention:** The system retains weapon tracks for 3 ghost frames and suspect tracks for 5 ghost frames (with a 0.85 confidence decay per frame) to bridge brief occlusions without creating persistent ghost clutter, while maintaining a 30-frame rolling window for temporal classification.
 
 ```python
 # Code Snippet 3.2: Zero-Lag Bounding Box EMA Smoothing (tracker.py)
@@ -585,7 +585,7 @@ All experiments and tests were run on a dedicated workstation.
 
 ##### 4.1.1. Dataset Splits and Training Setup
 * **YOLOv8 Threat Detector:** The unified weapon dataset (14,850 images) was split into 80% Train (11,880), 10% Val (1,485), and 10% Test (1,485). The model was trained using SGD with a learning rate of 0.01 and mosaic augmentations for 150 epochs.
-* **1D-CNN Action Classifier:** We used 5,400 feature sequences (1,800 per class) split into 70% Train (3,780), 15% Val (810), and 15% Test (810). Training was performed with the AdamW optimizer (learning rate 0.001, batch size 64) for 50 epochs.
+* **1D-CNN Action Classifier:** We used 29,053 feature sequences split into 70% Train (20,335), 15% Val (4,357), and 15% Test (4,361). Training was performed with the Adam optimizer (learning rate 0.001, batch size 32) for up to 300 epochs with early stopping patience of 8 (halting at epoch 49).
 
 ---
 
