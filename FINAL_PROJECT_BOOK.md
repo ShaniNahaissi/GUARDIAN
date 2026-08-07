@@ -107,7 +107,7 @@ Current automated video surveillance systems face three major technical challeng
 #### 1.3. Objectives
 The main goal of this project is to develop and evaluate **GUARDIAN**, an optimized near real-time video analytics platform. Specifically, the project achieves the following milestones:
 * **Develop a Spatial Threat Detector:** Train and export an optimized YOLOv8 ONNX model using a unified dataset of weapons (**Gun**, **Knife**) and human entities (**Suspect**), reaching mAP@0.5 > 85% on noisy surveillance feeds.
-* **Implement Zero-Lag Tracking:** Build an enhanced tracking state machine on top of **ByteTrack** [7] that prevents bounding box flicker and maintains constant track paths (MOTA > 80%) during multi-person interactions.
+* **Implement Zero-Lag Tracking:** Build an enhanced tracking state machine on top of **ByteTrack** [7] that eliminates the standard 3–5 frame tentative track initialization delay—displaying newly detected targets instantly on Frame 1—while applying single-frame EMA coordinate smoothing to prevent bounding box flicker.
 * **Design a Lightweight Temporal Action Classifier:** Create a 12-dimensional feature vector (coordinates, velocities, and weapon proximity) and train a **1D-CNN** to classify sequences of **Normal**, **Shooting**, and **Violence** with high accuracy (reaching up to 79.6% F1-score on violent actions and 73.7% overall test accuracy) over a 30-frame window.
 * **Achieve Near Real-Time Execution:** Implement a zero-dependency NumPy inference engine that, together with ONNX Runtime, runs the entire pipeline in under 25 ms per frame (>40 FPS) on standard hardware.
 
@@ -409,7 +409,7 @@ def merge_detections(weapon_dets, person_dets, suspect_label):
 ##### 3.3.2. Stage 2: Zero-Lag Tracking State Machine (ByteTrack)
 Raw detection boxes can jitter or drop during fast camera movements. GUARDIAN wraps `supervision.ByteTrack` in a tracking state machine (`tracker.py`):
 * **Hierarchical Matching:** Detections are split into high and low confidence groups. High confidence boxes are matched first using Kalman filter predictions and IoU distance. Unmatched tracks are then matched with low confidence boxes, recovering blurred or occluded weapons.
-* **Instant Bounding Box Smoothing:** Traditional trackers wait for a box to appear across multiple frames before starting a track, causing a lag in the UI. GUARDIAN displays new tracks immediately if confidence is > 0.55, and applies exponential moving average (EMA) coordinate smoothing (alpha = 0.70) to prevent coordinate jitter:
+* **Instant Track Promotion & EMA Smoothing:** Traditional MOT algorithms hold new detections in a tentative state for 3–5 frames before display, causing UI visual lag. GUARDIAN promotes valid detections (`conf >= 0.25`) instantly on Frame 1 and applies exponential moving average (EMA) coordinate smoothing (alpha = 0.60) to eliminate frame jitter without trajectory delay:
   b_smooth(t) = alpha * b_raw(t) + (1 - alpha) * b_smooth(t-1)
 * **Ghost Weapon Retention:** The system retains weapon tracks for 3 ghost frames and suspect tracks for 5 ghost frames (with a 0.85 confidence decay per frame) to bridge brief occlusions without creating persistent ghost clutter, while maintaining a 30-frame rolling window for temporal classification.
 
