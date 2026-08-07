@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - fix/detection-pipeline-stability
+      - project-book
 
 jobs:
   deploy:
