@@ -238,7 +238,7 @@ def convert_md_to_docx(md_path, output_docx_path):
         if line.strip():
             if "Note: Manually insert" in line:
                 img_matches = re.findall(r'\[(.*?\.png)\]', line)
-                allowed_embeds = [img for img in img_matches if img in {"current_metrics1.png", "current_metrics2.png"}]
+                allowed_embeds = [img for img in img_matches if img in {"main_page.png", "camera_view.png", "current_metrics1.png", "current_metrics2.png"}]
                 if allowed_embeds:
                     for img_name in allowed_embeds:
                         add_image_to_docx(doc, img_name)
