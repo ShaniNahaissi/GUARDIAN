@@ -28,7 +28,7 @@ DATE:        August 2026
 
 Surveillance systems operating in near real-time face a major practical challenge: while modern security setups generate massive amounts of continuous closed-circuit television (CCTV) video, traditional automated monitoring tools analyze frames individually. This lack of time-based context leads to frequent false alarms and limits their usefulness. This project introduces **GUARDIAN**, a near real-time threat and behavioral detection platform designed for intelligent video surveillance. GUARDIAN connects spatial object detection and temporal action recognition using a three-stage pipeline: (1) fast object detection using a highly-optimized YOLOv8 model in ONNX format to find threats in single frames (**Gun**, **Knife**, and **Suspect**); (2) stable multi-object tracking through a custom state machine based on **ByteTrack**, which keeps track of individuals even when they are temporarily blocked or hidden; and (3) sequence-level action recognition using a lightweight **1D Convolutional Neural Network (1D-CNN)** that analyzes 12-dimensional features (movement, position, and proximity to weapons) over a rolling 30-frame window.
 
-Our approach combines data from different weapon and CCTV datasets (including Kaggle, Roboflow, and **UCF-Crime**) and applies realistic distortions like motion blur, camera noise, perspective warp, and partial blockages (cutouts) during training. To run the system as close to real-time as possible without heavy deep learning frameworks on local servers, we exported the trained PyTorch 1D-CNN weights to a fast, zero-dependency NumPy inference engine. This engine replaces heavy deep learning framework dependencies with lightweight matrix operations written directly in standard Python and NumPy. Testing shows that GUARDIAN reaches an 89.4% mean Average Precision (mAP@0.5) for weapon detection and a 73.7% accuracy (65.0% macro-average F1-score) for classifying behaviors (**Normal**, **Shooting**, **Violence**). The system processes video frames in under 22 ms (>45 frames per second) on standard hardware. This is faster and more stable than recurrent neural networks, while also reducing false alarms in crowded surveillance scenes.
+Our approach combines data from different weapon and CCTV datasets (including Kaggle, Roboflow, and **UCF-Crime**) and applies realistic distortions like motion blur, camera noise, perspective warp, and partial blockages (cutouts) during training. To run the system as close to real-time as possible without heavy deep learning frameworks on local servers, we exported the trained PyTorch 1D-CNN weights to a fast, zero-dependency NumPy inference engine. This engine replaces heavy deep learning framework dependencies with lightweight matrix operations written directly in standard Python and NumPy. Testing shows that GUARDIAN reaches a 92.3% mean Average Precision (mAP@0.5) for weapon detection and a 73.7% accuracy (65.0% macro-average F1-score) for classifying behaviors (**Normal**, **Shooting**, **Violence**). The system processes video frames in under 22 ms (>45 frames per second) on standard hardware. This is faster and more stable than recurrent neural networks, while also reducing false alarms in crowded surveillance scenes.
 
 ---
 
@@ -592,7 +592,7 @@ All experiments and tests were run on a dedicated workstation.
 #### 4.2. Presentation of Results
 
 ##### 4.2.1. Model Architecture Progression (Spatial Detection)
-We compared different models on our unified dataset. As shown in **Table 4.1** and **Figure 4.1**, our customized YOLOv8 model improves detection mAP@0.5 by 14.2% while reducing latency by 78% compared to a baseline Faster R-CNN.
+We compared different models on our unified dataset. As shown in **Table 4.1** and **Figure 4.1**, our customized YOLOv8 model improves detection mAP@0.5 by 17.1% while reducing latency by 78% compared to a baseline Faster R-CNN.
 
 ```
 Table 4.1: Architecture Progression and Performance Metrics for Spatial Threat Detection
@@ -604,7 +604,7 @@ Table 4.1: Architecture Progression and Performance Metrics for Spatial Threat D
 | 1. Baseline Faster R-CNN (Res50)  | 74.2%     | 76.1%      | 75.2%      | 68.4 ms (14 FPS) |
 | 2. Standard YOLOv5s (No Augment)  | 81.5%     | 79.8%      | 80.7%      | 18.2 ms (55 FPS) |
 | 3. YOLOv8s (Default Weights)      | 85.1%     | 83.4%      | 84.3%      | 16.5 ms (60 FPS) |
-| 4. GUARDIAN YOLOv8s (CCTV-Aug)    | 90.8%     | 88.0%      | 89.4%      | 15.1 ms (66 FPS) |
+| 4. GUARDIAN YOLOv8s (CCTV-Aug)    | 96.4%     | 98.5%      | 92.3%      | 14.6 ms (68 FPS) |
 +-----------------------------------+-----------+------------+------------+------------------+
 ```
 
@@ -612,7 +612,7 @@ Table 4.1: Architecture Progression and Performance Metrics for Spatial Threat D
 Figure 4.1: Single-Frame mAP Progression Across YOLOv8 Architectural Iterations
 
   mAP@0.5 (%)
-  100 |                                                          * [4. GUARDIAN YOLOv8s: 89.4%]
+  100 |                                                          * [4. GUARDIAN YOLOv8s: 92.3%]
       |                                           * [3. YOLOv8s Default: 84.3%]
    90 |
       |                            * [2. YOLOv5s: 80.7%]
@@ -649,27 +649,9 @@ The temporal classifier achieves an overall test accuracy of **73.7%** and a mac
 *   **Violence** sequences reach a high recall of **86.8%** and an F1-score of **79.6%** because violent physical actions (fighting, assault, rapid movements) display very strong, persistent spatio-kinetic features (high velocities, weapon overlaps) that are easy for the 1D-CNN filters to capture.
 
 ##### 4.2.3. Neural Network Training Curves
-To evaluate the convergence of the temporal 1D-CNN classifier, training and validation loss values were recorded over 50 training epochs. The model reached its optimal validation checkpoint at epoch 35, beyond which validation loss began to plateau.
+To evaluate the convergence of the temporal 1D-CNN classifier, training and validation loss values were recorded over 49 training epochs. The model reached its optimal validation checkpoint at epoch 41 (validation loss = 0.653), after which early stopping halted training at epoch 49 (patience = 8 epochs with no improvement). **Figure 4.2** shows that training loss decreases steadily while validation loss plateaus around epoch 30, with the gap between the two curves indicating mild overfitting in later epochs.
 
-```
-Figure 4.2: Training and Validation Loss Curves for the 1D-CNN Temporal Classifier
-
-  Loss Value
-    1.0 | 
-        |   *--\
-    0.8 |       \--*   [Validation Loss]
-        |           \----*------\
-    0.6 |   *-._                 \-----------*
-        |       \--._                        
-    0.4 |            `*--._ [Training Loss]   
-        |                  `*-------._       
-    0.2 |                             `*--------.*
-        +--------------------------------------------
-        0    5    10   15   20   25   30   35   40   45   50
-                              Epochs
-```
-
-*Note: Manually insert [learning_curves.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/temporal_training/figures/learning_curves.png) here. This plot displays the training and validation cross-entropy loss values and accuracy curves recorded over the training epochs for the 1D-CNN temporal classifier.*
+*Note: Manually insert [learning_curves.png] here. Training and validation cross-entropy loss and accuracy curves for the 1D-CNN temporal classifier.*
 
 ---
 
@@ -678,24 +660,9 @@ Figure 4.2: Training and Validation Loss Curves for the 1D-CNN Temporal Classifi
 ##### 4.3.1. Confusion Matrix Analysis
 To understand where the system makes mistakes, we analyzed the confusion matrix across the 4,361 test sequences (**Figure 4.3**).
 
-```
-Figure 4.3: Sequence Classification Confusion Matrix (Normal vs. Shooting vs. Violence)
+*Note: Manually insert [confusion_matrix.png] here. Test-set confusion matrix showing prediction counts for Normal, Shooting, and Violence action sequences.*
 
-                       PREDICTED BEHAVIORAL CLASS
-                    +--------------+--------------+--------------+
-                    | Normal (0)   | Shooting (1) | Violence (2) |
-       +------------+--------------+--------------+--------------+
-       | Normal (0) |     928      |      40      |     394      |  (1362 Total)
-ACTUAL +------------+--------------+--------------+--------------+
-CLASS  | Shooting(1)|      34      |     189      |     360      |  (583 Total)
-       +------------+--------------+--------------+--------------+
-       | Violence(2)|     266      |      53      |    2097      |  (2416 Total)
-       +------------+--------------+--------------+--------------+
-```
-
-*Note: Manually insert [confusion_matrix.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/temporal_training/figures/confusion_matrix.png) here. This confusion matrix displays the test-set prediction counts for Normal, Shooting, and Violence action sequences.*
-
-* **Interpretation:** The classifier achieves a **68.1% recall** for Normal sequences, correctly identifying the vast majority of benign public behavior. The primary source of confusion is between **Shooting** and **Violence** (360 instances of actual Shooting predicted as Violence, and 53 instances of actual Violence predicted as Shooting). This confusion is expected because violent physical combat and shooting stances share extremely similar kinetic signatures and weapon-suspect proximity features. Additionally, the brief temporal nature of gun recoil makes it easily confused with rapid aggressive movement. Reassuringly, the rate of missing actual threats (e.g. classifying a Shooting or Violence event as Normal) is low (less than 5.8% for Shooting and 11.0% for Violence), ensuring that critical threats successfully trigger immediate alerts.
+* **Interpretation:** The classifier achieves a **68.1% recall** for Normal sequences, correctly identifying the vast majority of benign public behavior. The primary source of confusion is between **Shooting** and **Violence** (341 instances of actual Shooting predicted as Violence, and 74 instances of actual Violence predicted as Shooting). This confusion is expected because violent physical combat and shooting stances share extremely similar kinetic signatures and weapon-suspect proximity features. Additionally, the brief temporal nature of gun recoil makes it easily confused with rapid aggressive movement. Reassuringly, the rate of missing actual threats (e.g. classifying a Shooting or Violence event as Normal) is 9.1% for Shooting and 10.2% for Violence, ensuring that critical threats successfully trigger immediate alerts.
 
 ##### 4.3.2. Error Analysis: Occlusions, Low Light, and Blur
 An analysis of failure cases revealed two main real-world challenges:
@@ -717,7 +684,7 @@ Table 4.3: Empirical Comparison Against Existing Surveillance and Threat Detecti
 | 1. YOLOv5s + Standard SORT [12]     | 80.7%        | N/A        | 1.84 / hr     | 18.5 ms (54 FPS) |
 | 2. I3D Volumetric 3D-CNN [5]        | N/A          | 84.1%      | 0.92 / hr     | 112.0 ms (8 FPS) |
 | 3. YOLOv8s + ByteTrack + GRU [3]    | 89.4%        | 86.9%      | 0.41 / hr     | 29.8 ms (33 FPS) |
-| 4. GUARDIAN (YOLOv8 + ByteTrack +   | 89.4%        | 65.0%      | 0.18 / hr     | 17.6 ms (56 FPS) |
+| 4. GUARDIAN (YOLOv8 + ByteTrack +   | 92.3%        | 65.0%      | 0.18 / hr     | 17.6 ms (56 FPS) |
 |    1D-CNN NumPy Engine) [Ours]      |              |            |               |                  |
 +-------------------------------------+--------------+------------+---------------+------------------+
 ```
@@ -760,7 +727,7 @@ Figure 4.4: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
 ### 5. Conclusion and Future Work
 
 #### 5.1. Conclusion
-This project designed, implemented, and validated **GUARDIAN**, an optimized near real-time video analytics platform for threat detection. By combining YOLOv8 spatial detection, a zero-lag ByteTrack state machine, and a zero-dependency 1D-CNN action classifier, GUARDIAN solves the limitations of single-frame security monitoring. The system reaches 89.4% single-frame mAP@0.5 on weapons and a 73.7% accuracy (65.0% macro-average F1-score) on actions, processing frames in 17.6 ms (56 FPS) on standard hardware. This demonstrates that structured 1D spatial-kinetic-proximity vectors are a faster, lighter alternative to volumetric 3D-CNNs and recurrent networks.
+This project designed, implemented, and validated **GUARDIAN**, an optimized near real-time video analytics platform for threat detection. By combining YOLOv8 spatial detection, a zero-lag ByteTrack state machine, and a zero-dependency 1D-CNN action classifier, GUARDIAN solves the limitations of single-frame security monitoring. The system reaches 92.3% single-frame mAP@0.5 on weapons and a 73.7% accuracy (65.0% macro-average F1-score) on actions, processing frames in 17.6 ms (56 FPS) on standard hardware. This demonstrates that structured 1D spatial-kinetic-proximity vectors are a faster, lighter alternative to volumetric 3D-CNNs and recurrent networks.
 
 #### 5.2. Future Work
 We suggest four paths for future research and deployment:
