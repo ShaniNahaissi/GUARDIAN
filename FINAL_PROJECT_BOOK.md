@@ -743,7 +743,7 @@ Figure 4.4: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
       +--------------------------------+---------------+---------------+---------------+
 ```
 
-*Note: Manually insert [current_metrics.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/current_metrics.png) or [expected_metrics.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/expected_metrics.png) here. This plot displays the near real-time processing throughput, frame latency variations, and CPU/GPU memory usage during live local inference.*
+*Note: Manually insert [current_metrics1.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/current_metrics1.png) followed immediately by [current_metrics2.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/metrics/current_metrics2.png) here. These plots display the near real-time processing throughput, frame latency variations, and CPU/GPU memory usage during live local inference.*
 
 ---
 
