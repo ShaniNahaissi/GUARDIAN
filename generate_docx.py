@@ -46,6 +46,31 @@ def add_styled_paragraph(doc, text, style='Normal', space_after=6, line_spacing=
             p.add_run(part)
     return p
 
+def add_image_to_docx(doc, image_name):
+    paths_to_try = [
+        os.path.join("metrics", image_name),
+        os.path.join("frontend", "frontend_definition", image_name),
+        image_name
+    ]
+    found_path = None
+    for p in paths_to_try:
+        if os.path.exists(p):
+            found_path = p
+            break
+    
+    if found_path:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_before = Pt(6)
+        p.paragraph_format.space_after = Pt(6)
+        run = p.add_run()
+        run.add_picture(found_path, width=Inches(5.8))
+        print(f"Embedded image: {found_path}")
+        return True
+    else:
+        print(f"WARNING: Image not found: {image_name}")
+        return False
+
 def convert_md_to_docx(md_path, output_docx_path):
     doc = Document()
 
@@ -211,6 +236,13 @@ def convert_md_to_docx(md_path, output_docx_path):
 
         # Normal text
         if line.strip():
+            if "Note: Manually insert" in line:
+                img_matches = re.findall(r'\[(.*?\.png)\]', line)
+                if img_matches:
+                    add_styled_paragraph(doc, line.strip(), style='Normal', space_after=6)
+                    for img_name in img_matches:
+                        add_image_to_docx(doc, img_name)
+                    continue
             add_styled_paragraph(doc, line.strip(), style='Normal', space_after=6)
 
     try:
