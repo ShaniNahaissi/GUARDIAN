@@ -715,7 +715,7 @@ Table 4.3: Empirical Comparison Against Existing Surveillance and Threat Detecti
 | 1. YOLOv5s + Standard SORT [12]     | 80.7%        | N/A        | 1.84 / hr     | 18.5 ms (54 FPS) |
 | 2. I3D Volumetric 3D-CNN [5]        | N/A          | 84.1%      | 0.92 / hr     | 112.0 ms (8 FPS) |
 | 3. YOLOv8s + ByteTrack + GRU [3]    | 89.4%        | 86.9%      | 0.41 / hr     | 29.8 ms (33 FPS) |
-| 4. GUARDIAN (YOLOv8 + ByteTrack +   | 89.4%        | 88.7%      | 0.18 / hr     | 17.6 ms (56 FPS) |
+| 4. GUARDIAN (YOLOv8 + ByteTrack +   | 89.4%        | 65.0%      | 0.18 / hr     | 17.6 ms (56 FPS) |
 |    1D-CNN NumPy Engine) [Ours]      |              |            |               |                  |
 +-------------------------------------+--------------+------------+---------------+------------------+
 ```
@@ -758,7 +758,7 @@ Figure 4.4: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
 ### 5. Conclusion and Future Work
 
 #### 5.1. Conclusion
-This project designed, implemented, and validated **GUARDIAN**, an optimized near real-time video analytics platform for threat detection. By combining YOLOv8 spatial detection, a zero-lag ByteTrack state machine, and a zero-dependency 1D-CNN action classifier, GUARDIAN solves the limitations of single-frame security monitoring. The system reaches 89.4% single-frame mAP@0.5 on weapons and an 88.7% F1-score on actions, processing frames in 17.6 ms (56 FPS) on standard hardware. This demonstrates that structured 1D spatial-kinetic-proximity vectors are a faster, lighter alternative to volumetric 3D-CNNs and recurrent networks.
+This project designed, implemented, and validated **GUARDIAN**, an optimized near real-time video analytics platform for threat detection. By combining YOLOv8 spatial detection, a zero-lag ByteTrack state machine, and a zero-dependency 1D-CNN action classifier, GUARDIAN solves the limitations of single-frame security monitoring. The system reaches 89.4% single-frame mAP@0.5 on weapons and a 73.7% accuracy (65.0% macro-average F1-score) on actions, processing frames in 17.6 ms (56 FPS) on standard hardware. This demonstrates that structured 1D spatial-kinetic-proximity vectors are a faster, lighter alternative to volumetric 3D-CNNs and recurrent networks.
 
 #### 5.2. Future Work
 We suggest four paths for future research and deployment:
