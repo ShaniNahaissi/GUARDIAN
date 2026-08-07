@@ -238,10 +238,22 @@ def convert_md_to_docx(md_path, output_docx_path):
         if line.strip():
             if "Note: Manually insert" in line:
                 img_matches = re.findall(r'\[(.*?\.png)\]', line)
-                if img_matches:
-                    add_styled_paragraph(doc, line.strip(), style='Normal', space_after=6)
-                    for img_name in img_matches:
+                allowed_embeds = [img for img in img_matches if img in {"current_metrics1.png", "current_metrics2.png"}]
+                if allowed_embeds:
+                    for img_name in allowed_embeds:
                         add_image_to_docx(doc, img_name)
+                    # Extract the description part after "here. "
+                    desc_parts = line.split("here. ")
+                    if len(desc_parts) > 1:
+                        desc_text = desc_parts[1].rstrip('* ')
+                        p_desc = doc.add_paragraph()
+                        p_desc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        p_desc.paragraph_format.space_before = Pt(4)
+                        p_desc.paragraph_format.space_after = Pt(12)
+                        run = p_desc.add_run(desc_text)
+                        run.italic = True
+                        run.font.size = Pt(9.5)
+                        run.font.color.rgb = RGBColor(0x52, 0x52, 0x52)
                     continue
             add_styled_paragraph(doc, line.strip(), style='Normal', space_after=6)
 
