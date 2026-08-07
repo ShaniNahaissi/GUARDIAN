@@ -28,7 +28,7 @@ DATE:        August 2026
 
 Surveillance systems operating in near real-time face a major practical challenge: while modern security setups generate massive amounts of continuous closed-circuit television (CCTV) video, traditional automated monitoring tools analyze frames individually. This lack of time-based context leads to frequent false alarms and limits their usefulness. This project introduces **GUARDIAN**, a near real-time threat and behavioral detection platform designed for intelligent video surveillance. GUARDIAN connects spatial object detection and temporal action recognition using a three-stage pipeline: (1) fast object detection using a highly-optimized YOLOv8 model in ONNX format to find threats in single frames (**Gun**, **Knife**, and **Suspect**); (2) stable multi-object tracking through a custom state machine based on **ByteTrack**, which keeps track of individuals even when they are temporarily blocked or hidden; and (3) sequence-level action recognition using a lightweight **1D Convolutional Neural Network (1D-CNN)** that analyzes 12-dimensional features (movement, position, and proximity to weapons) over a rolling 30-frame window.
 
-Our approach combines data from different weapon and CCTV datasets (including Kaggle, Roboflow, and **UCF-Crime**) and applies realistic distortions like motion blur, camera noise, perspective warp, and partial blockages (cutouts) during training. To run the system as close to real-time as possible without heavy deep learning frameworks on local servers, we exported the trained PyTorch 1D-CNN weights to a fast, zero-dependency NumPy inference engine. This engine replaces heavy deep learning framework dependencies with lightweight matrix operations written directly in standard Python and NumPy. Testing shows that GUARDIAN reaches an 89.4% mean Average Precision (mAP@0.5) for weapon detection and an 88.7% F1-score for classifying behaviors (**Normal**, **Shooting**, **Violence**). The system processes video frames in under 22 ms (>45 frames per second) on standard hardware. This is faster and more stable than recurrent neural networks, while also reducing false alarms in crowded surveillance scenes.
+Our approach combines data from different weapon and CCTV datasets (including Kaggle, Roboflow, and **UCF-Crime**) and applies realistic distortions like motion blur, camera noise, perspective warp, and partial blockages (cutouts) during training. To run the system as close to real-time as possible without heavy deep learning frameworks on local servers, we exported the trained PyTorch 1D-CNN weights to a fast, zero-dependency NumPy inference engine. This engine replaces heavy deep learning framework dependencies with lightweight matrix operations written directly in standard Python and NumPy. Testing shows that GUARDIAN reaches an 89.4% mean Average Precision (mAP@0.5) for weapon detection and a 73.7% accuracy (65.0% macro-average F1-score) for classifying behaviors (**Normal**, **Shooting**, **Violence**). The system processes video frames in under 22 ms (>45 frames per second) on standard hardware. This is faster and more stable than recurrent neural networks, while also reducing false alarms in crowded surveillance scenes.
 
 ---
 
@@ -624,7 +624,7 @@ Figure 4.1: Single-Frame mAP Progression Across YOLOv8 Architectural Iterations
 ```
 
 ##### 4.2.2. Sequence Classification Performance
-While single-frame detection locates static threats, sequence classification identifies dynamic anomalies. **Table 4.2** details the performance of our 30-frame 1D-CNN temporal classifier.
+While single-frame detection locates static threats, sequence classification identifies dynamic anomalies. **Table 4.2** details the performance of our 30-frame 1D-CNN temporal classifier evaluated on the test split of the sequence-vector dataset derived from the UCF-Crime surveillance corpus.
 
 ```
 Table 4.2: Temporal Action Classifier Sequence Performance (30-Frame Windows)
@@ -632,13 +632,21 @@ Table 4.2: Temporal Action Classifier Sequence Performance (30-Frame Windows)
 +---------------------+-------------------+-----------------+-----------------+
 | Behavioral Class    | Precision (P)     | Recall (R)      | F1-Score        |
 +---------------------+-------------------+-----------------+-----------------+
-| Normal (0)          | 94.2%             | 96.1%           | 95.1%           |
-| Shooting (1)        | 88.5%             | 86.2%           | 87.3%           |
-| Violence (2)        | 85.4%             | 82.1%           | 83.7%           |
+| Normal (0)          | 75.6%             | 68.1%           | 71.7%           |
+| Shooting (1)        | 67.0%             | 32.4%           | 43.7%           |
+| Violence (2)        | 73.5%             | 86.8%           | 79.6%           |
 +---------------------+-------------------+-----------------+-----------------+
-| Macro Average       | 89.4%             | 88.1%           | 88.7%           |
+| Macro Average       | 72.0%             | 62.4%           | 65.0%           |
+| Weighted Average    | 73.3%             | 73.7%           | 72.3%           |
++---------------------+-------------------+-----------------+-----------------+
+| Overall Accuracy    |                   |                 | 73.7%           |
 +---------------------+-------------------+-----------------+-----------------+
 ```
+
+The temporal classifier achieves an overall test accuracy of **73.7%** and a macro-average F1-score of **65.0%**. The individual class metrics reveal that:
+*   **Normal** sequences are identified with **75.6% precision** and **68.1% recall**. This shows a solid capacity to filter out benign public behavior, though some stationary or pre-action tracks are classified as normal.
+*   **Shooting** sequences show a recall of **32.4%** and an F1-score of **43.7%**. This lower score is expected because shooting stances and firearm recoil are extremely brief (highly sparse in time) and are easily confused with aggressive motion/violence or normal movements under poor lighting or extreme compression.
+*   **Violence** sequences reach a high recall of **86.8%** and an F1-score of **79.6%** because violent physical actions (fighting, assault, rapid movements) display very strong, persistent spatio-kinetic features (high velocities, weapon overlaps) that are easy for the 1D-CNN filters to capture.
 
 ##### 4.2.3. Neural Network Training Curves
 To evaluate the convergence of the temporal 1D-CNN classifier, training and validation loss values were recorded over 50 training epochs. The model reached its optimal validation checkpoint at epoch 35, beyond which validation loss began to plateau.
@@ -668,7 +676,7 @@ Figure 4.2: Training and Validation Loss Curves for the 1D-CNN Temporal Classifi
 #### 4.3. Data Analysis and Interpretation
 
 ##### 4.3.1. Confusion Matrix Analysis
-To understand where the system makes mistakes, we analyzed the confusion matrix across 810 test sequences (**Figure 4.3**).
+To understand where the system makes mistakes, we analyzed the confusion matrix across the 4,361 test sequences (**Figure 4.3**).
 
 ```
 Figure 4.3: Sequence Classification Confusion Matrix (Normal vs. Shooting vs. Violence)
@@ -677,15 +685,15 @@ Figure 4.3: Sequence Classification Confusion Matrix (Normal vs. Shooting vs. Vi
                     +--------------+--------------+--------------+
                     | Normal (0)   | Shooting (1) | Violence (2) |
        +------------+--------------+--------------+--------------+
-       | Normal (0) |     259      |      6       |      5       |  (270 Total)
+       | Normal (0) |     928      |      40      |     394      |  (1362 Total)
 ACTUAL +------------+--------------+--------------+--------------+
-CLASS  | Shooting(1)|      14      |     233      |     23       |  (270 Total)
+CLASS  | Shooting(1)|      34      |     189      |     360      |  (583 Total)
        +------------+--------------+--------------+--------------+
-       | Violence(2)|      18      |      30      |     222      |  (270 Total)
+       | Violence(2)|     266      |      53      |    2097      |  (2416 Total)
        +------------+--------------+--------------+--------------+
 ```
 
-* **Interpretation:** The classifier works extremely well for **Normal** sequences (95.9% correct rejection), which confirms that our static displacement filter effectively avoids false alarms during normal public movements. The primary source of confusion is between **Shooting** and **Violence** (30 instances of actual Violence predicted as Shooting, and 23 vice versa). This is because violent physical actions and weapon brandishing share similar geometric patterns and proximity indicators (such as weapon-suspect overlap). Crucially, less than 6.7% of violent or shooting events were missed as Normal, ensuring that threats trigger immediate alerts.
+* **Interpretation:** The classifier achieves a **68.1% recall** for Normal sequences, correctly identifying the vast majority of benign public behavior. The primary source of confusion is between **Shooting** and **Violence** (360 instances of actual Shooting predicted as Violence, and 53 instances of actual Violence predicted as Shooting). This confusion is expected because violent physical combat and shooting stances share extremely similar kinetic signatures and weapon-suspect proximity features. Additionally, the brief temporal nature of gun recoil makes it easily confused with rapid aggressive movement. Reassuringly, the rate of missing actual threats (e.g. classifying a Shooting or Violence event as Normal) is low (less than 5.8% for Shooting and 11.0% for Violence), ensuring that critical threats successfully trigger immediate alerts.
 
 ##### 4.3.2. Error Analysis: Occlusions, Low Light, and Blur
 An analysis of failure cases revealed two main real-world challenges:
