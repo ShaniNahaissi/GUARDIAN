@@ -72,7 +72,59 @@ def add_image_to_docx(doc, image_name):
         print(f"WARNING: Image not found: {image_name}")
         return False
 
+def extract_missing_figures():
+    from pathlib import Path
+    figures_dir = Path("temporal_training/figures")
+    notebook_path = Path("temporal_training/temporal_training.ipynb")
+    
+    needed_files = ["learning_curves.png", "confusion_matrix.png", "roc_pr_curves.png", "class_balance.png"]
+    missing = [f for f in needed_files if not (figures_dir / f).exists()]
+    
+    if not missing:
+        return
+        
+    if not notebook_path.exists():
+        print(f"WARNING: Needed figures {missing} are missing and {notebook_path} does not exist to extract them.")
+        return
+        
+    print(f"Auto-extracting missing figures {missing} from {notebook_path}...")
+    import json
+    import base64
+    try:
+        with open(notebook_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        figures_dir.mkdir(parents=True, exist_ok=True)
+        extracted = 0
+        for cell in data.get("cells", []):
+            if "outputs" in cell:
+                for out in cell["outputs"]:
+                    if "data" in out and "image/png" in out["data"]:
+                        img_data = out["data"]["image/png"]
+                        img_bytes = base64.b64decode(img_data.strip())
+                        
+                        source = "".join(cell.get("source", []))
+                        filename = None
+                        if "learning_curves.png" in source or "train_loss" in source:
+                            filename = "learning_curves.png"
+                        elif "confusion_matrix.png" in source or "ConfusionMatrixDisplay" in source:
+                            filename = "confusion_matrix.png"
+                        elif "roc_pr_curves.png" in source or "roc_curve" in source:
+                            filename = "roc_pr_curves.png"
+                        elif "class_balance.png" in source or "sequences_saved" in source:
+                            filename = "class_balance.png"
+                            
+                        if filename and filename in missing:
+                            dest_path = figures_dir / filename
+                            dest_path.write_bytes(img_bytes)
+                            print(f"Auto-extracted: {filename}")
+                            extracted += 1
+        print(f"Auto-extracted {extracted} plots successfully.")
+    except Exception as e:
+        print(f"WARNING: Failed to auto-extract figures from notebook: {e}")
+
 def convert_md_to_docx(md_path, output_docx_path):
+    extract_missing_figures()
     doc = Document()
 
     # Set page margins (1 inch)
