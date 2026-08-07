@@ -669,7 +669,7 @@ Figure 4.2: Training and Validation Loss Curves for the 1D-CNN Temporal Classifi
                               Epochs
 ```
 
-*Note: The actual high-resolution graphical plot of the loss curves generated during model training should be manually inserted here in the final compiled Word document.*
+*Note: Manually insert [learning_curves.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/temporal_training/figures/learning_curves.png) here. This plot displays the training and validation cross-entropy loss values and accuracy curves recorded over the training epochs for the 1D-CNN temporal classifier.*
 
 ---
 
@@ -692,6 +692,8 @@ CLASS  | Shooting(1)|      34      |     189      |     360      |  (583 Total)
        | Violence(2)|     266      |      53      |    2097      |  (2416 Total)
        +------------+--------------+--------------+--------------+
 ```
+
+*Note: Manually insert [confusion_matrix.png](file:///c:/Users/Shani%20Nahaissi/GUARDIAN/GUARDIAN/temporal_training/figures/confusion_matrix.png) here. This confusion matrix displays the test-set prediction counts for Normal, Shooting, and Violence action sequences.*
 
 * **Interpretation:** The classifier achieves a **68.1% recall** for Normal sequences, correctly identifying the vast majority of benign public behavior. The primary source of confusion is between **Shooting** and **Violence** (360 instances of actual Shooting predicted as Violence, and 53 instances of actual Violence predicted as Shooting). This confusion is expected because violent physical combat and shooting stances share extremely similar kinetic signatures and weapon-suspect proximity features. Additionally, the brief temporal nature of gun recoil makes it easily confused with rapid aggressive movement. Reassuringly, the rate of missing actual threats (e.g. classifying a Shooting or Violence event as Normal) is low (less than 5.8% for Shooting and 11.0% for Violence), ensuring that critical threats successfully trigger immediate alerts.
 
