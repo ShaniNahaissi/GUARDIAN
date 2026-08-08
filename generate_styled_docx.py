@@ -360,6 +360,9 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
         if '</div>' in line:
             is_centered = False
             continue
+
+        # Code block toggle
+        if line.strip().startswith('```'):
             if in_code_block:
                 flush_code_block()
                 in_code_block = False
@@ -389,28 +392,46 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
 
         # Headings (Strictly preserving original text and levels)
         if line.startswith('# '):
-            p = doc.add_heading(line[2:].strip(), level=0)
             if is_centered:
+                p = doc.add_paragraph()
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.paragraph_format.space_before = Pt(20)
-            p.paragraph_format.space_after = Pt(8)
-            for r in p.runs:
-                r.font.name = 'Calibri'
-                r.font.size = Pt(22)
-                r.font.bold = True
-                r.font.color.rgb = COLOR_PRIMARY
+                p.paragraph_format.space_before = Pt(64)
+                p.paragraph_format.space_after = Pt(14)
+                run = p.add_run(line[2:].strip())
+                run.bold = True
+                run.font.name = 'Calibri'
+                run.font.size = Pt(28)
+                run.font.color.rgb = COLOR_PRIMARY
+            else:
+                p = doc.add_heading(line[2:].strip(), level=0)
+                p.paragraph_format.space_before = Pt(20)
+                p.paragraph_format.space_after = Pt(8)
+                for r in p.runs:
+                    r.font.name = 'Calibri'
+                    r.font.size = Pt(22)
+                    r.font.bold = True
+                    r.font.color.rgb = COLOR_PRIMARY
             continue
         elif line.startswith('## '):
-            p = doc.add_heading(line[3:].strip(), level=1)
             if is_centered:
+                p = doc.add_paragraph()
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.paragraph_format.space_before = Pt(16)
-            p.paragraph_format.space_after = Pt(6)
-            for r in p.runs:
-                r.font.name = 'Calibri'
-                r.font.size = Pt(16)
-                r.font.bold = True
-                r.font.color.rgb = COLOR_PRIMARY
+                p.paragraph_format.space_before = Pt(0)
+                p.paragraph_format.space_after = Pt(36)
+                run = p.add_run(line[3:].strip())
+                run.bold = True
+                run.font.name = 'Calibri'
+                run.font.size = Pt(13.5)
+                run.font.color.rgb = COLOR_SECONDARY
+            else:
+                p = doc.add_heading(line[3:].strip(), level=1)
+                p.paragraph_format.space_before = Pt(16)
+                p.paragraph_format.space_after = Pt(6)
+                for r in p.runs:
+                    r.font.name = 'Calibri'
+                    r.font.size = Pt(16)
+                    r.font.bold = True
+                    r.font.color.rgb = COLOR_PRIMARY
             continue
         elif line.startswith('### '):
             p = doc.add_heading(line[4:].strip(), level=2)
@@ -483,7 +504,24 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
                         run.font.italic = True
                         run.font.color.rgb = COLOR_MUTED
                     continue
-            add_styled_paragraph(doc, line.strip(), style='Normal', space_after=5, line_spacing=1.18, is_centered=is_centered)
+
+            if is_centered:
+                text_clean = line.strip()
+                if text_clean == "by":
+                    add_styled_paragraph(doc, text_clean, style='Normal', space_after=10, is_centered=True)
+                elif "Shani Nahaissi" in text_clean:
+                    add_styled_paragraph(doc, text_clean, style='Normal', space_after=36, is_centered=True)
+                elif "Approved by the supervisor" in text_clean:
+                    add_styled_paragraph(doc, text_clean, style='Normal', space_after=36, is_centered=True)
+                elif "Submitted to" in text_clean or "August 2026" in text_clean:
+                    add_styled_paragraph(doc, text_clean, style='Normal', space_after=4, is_centered=True)
+                elif "Rishon LeZion" in text_clean:
+                    add_styled_paragraph(doc, text_clean, style='Normal', space_after=0, is_centered=True)
+                else:
+                    add_styled_paragraph(doc, text_clean, style='Normal', space_after=6, is_centered=True)
+                continue
+
+            add_styled_paragraph(doc, line.strip(), style='Normal', space_after=5, line_spacing=1.18)
 
     try:
         doc.save(output_docx_path)
