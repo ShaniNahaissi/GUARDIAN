@@ -355,12 +355,8 @@ Figure 3.3: Three-Stage Hierarchical Detection, Tracking, and Temporal Action Pi
 
 ##### 3.3.1. Stage 1: Integrated Dual-Model Spatial Threat Detection
 To keep latency under 10ms on standard hardware, the spatial threat detector operates a dual-detector pipeline consisting of a pretrained Person detector model running in tandem with our custom-trained YOLOv8 model:
-* **Preprocessed Input Normalization:** For both models, BGR video frames are resized to 640x640, converted to RGB, normalized to the range [0.0, 1.0], and formatted as a float32 tensor (1 x 3 x 640 x 640).
-* **Output Parsing:** The custom YOLOv8 output tensor has shape (1, 7, 8400), containing 4 coordinates (cx, cy, w, h) and 3 class scores (`Gun`, `Knife`, and `Suspect`). The pretrained COCO model detects the `person` class (0).
-* **Remapping and Cross-Model NMS:** The custom model's weapon detections (0: `Gun`, 1: `Knife`) and `Suspect` detections (2) are merged with the remapped `person` (remapped to `Suspect` [2]) detections from the pretrained model. Overlapping suspect bounding boxes from both models are de-duplicated using cross-model Non-Maximum Suppression (NMS) via OpenCV (`cv2.dnn.NMSBoxes`) with an IoU threshold of 0.50.
-* **Coordinate Conversion:** Central coordinates are converted to pixel locations:
-  x1 = (cx - 0.5*w) * scale_x,   y1 = (cy - 0.5*h) * scale_y
-  x2 = (cx + 0.5*w) * scale_x,   y2 = (cy + 0.5*h) * scale_y
+* **Preprocessed Input Normalization:** BGR video frames are resized to 640x640, converted to RGB, normalized to the range [0.0, 1.0], and formatted as a float32 tensor (1 x 3 x 640 x 640) for ONNX Runtime execution.
+* **Dual-Model Class Remapping & Cross-Model NMS:** The custom model's weapon detections (0: `Gun`, 1: `Knife`) and `Suspect` detections (2) are merged with the remapped person detections (remapped to `Suspect` [2]) from the pretrained COCO model. Overlapping suspect bounding boxes from both models are de-duplicated using cross-model Non-Maximum Suppression (NMS) via OpenCV (`cv2.dnn.NMSBoxes`) with an IoU threshold of 0.50 before passing active tracks to ByteTrack (**Code Snippet 3.1**).
 
 ```python
 # Code Snippet 3.1: Dual-Model Ingestion & Cross-Model NMS (pipeline.py)
