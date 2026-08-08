@@ -6,9 +6,9 @@
 
 by
 
-**Shani Nahaissi, Agam Copel, Ameet Sokolic, and Eran Shahaf**
+**Shani Nahaissi, Agam Copel, Eran Shahaf, and Ameet Sokolic**
 
-Approved by the supervisor: [Insert Supervisor Name]
+Approved by the supervisor: Dr. Moshe Butman
 
 Submitted to the Computer Science Faculty of College of Management
 August 2026
