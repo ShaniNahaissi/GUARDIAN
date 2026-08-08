@@ -363,30 +363,7 @@ To keep latency under 10ms on standard hardware, the spatial threat detector ope
   x2 = (cx + 0.5*w) * scale_x,   y2 = (cy + 0.5*h) * scale_y
 
 ```python
-# Code Snippet 3.1: YOLOv8 ONNX Post-Processing & NMS Decoding (yolo.py)
-for row in preds:
-    class_scores = row[4:]  # YOLOv8 format: direct class scores starting at index 4
-    if class_scores.size == 0:
-        continue
-    cls_id = int(np.argmax(class_scores))
-    score = float(class_scores[cls_id])
-    if score < self.conf_threshold:
-        continue
-    # Decode centroid (cx, cy, w, h) to corner bounding box (x1, y1, x2, y2)
-    cx, cy, bw, bh = row[0], row[1], row[2], row[3]
-    x1 = int((cx - 0.5 * bw) * scale_x)
-    y1 = int((cy - 0.5 * bh) * scale_y)
-    x2 = int((cx + 0.5 * bw) * scale_x)
-    y2 = int((cy + 0.5 * bh) * scale_y)
-    boxes.append([x1, y1, x2, y2])
-    scores.append(score)
-    class_ids.append(cls_id)
-# Perform Non-Maximum Suppression
-indices = cv2.dnn.NMSBoxes(boxes, scores, self.conf_threshold, self.iou_threshold)
-```
-
-```python
-# Code Snippet 3.1b: Dual-Model Ingestion & Cross-Model NMS (pipeline.py)
+# Code Snippet 3.1: Dual-Model Ingestion & Cross-Model NMS (pipeline.py)
 def merge_detections(weapon_dets, person_dets, suspect_label):
     weapons = [d for d in weapon_dets if d.class_id in (0, 1)]
     suspects = [d for d in weapon_dets if d.class_id == 2]
@@ -730,11 +707,12 @@ Figure 4.4: End-to-End Latency Breakdown vs. Stream Resolution and Track Density
 This project designed, implemented, and validated **GUARDIAN**, an optimized near real-time video analytics platform for threat detection. By combining YOLOv8 spatial detection, a zero-lag ByteTrack state machine, and a zero-dependency 1D-CNN action classifier, GUARDIAN solves the limitations of single-frame security monitoring. The system reaches 92.3% single-frame mAP@0.5 on weapons and a 73.7% accuracy (65.0% macro-average F1-score) on actions, processing frames in 17.6 ms (56 FPS) on standard hardware. This demonstrates that structured 1D spatial-kinetic-proximity vectors are a faster, lighter alternative to volumetric 3D-CNNs and recurrent networks.
 
 #### 5.2. Future Work
-We suggest four paths for future research and deployment:
+We suggest five paths for future research and deployment:
 1. **Temporal Transformers:** While 1D-CNNs model local 5-frame kinetics well, replacing the convolutions with a lightweight Temporal Transformer [16] could analyze longer windows (T > 120 frames) to recognize slow suspicious activities like loitering.
 2. **Multi-Camera Re-Identification (ReID):** Adding a lightweight ReID embedding module to the ByteTrack system would enable tracking suspect identities across different cameras in large facilities.
-3. **TensorRT Optimization:** Compiling the YOLOv8 and 1D-CNN weights into INT8 precision using NVIDIA TensorRT would reduce latency below 8 ms per frame, enabling execution on low-cost devices like the NVIDIA Jetson Orin Nano embedded boards.
-4. **Decoupled Inference Microservice Architecture:** Currently, the deep learning ONNX models (YOLOv8 custom and person detectors) and the 1D-CNN classifier run inside the main FastAPI application process. Under heavy stream loads, this creates resource contention between network I/O (handling WebSockets, HTTP REST requests, database connection pools) and compute-heavy matrix multiplications, increasing latency. Separating the model inference pipeline into a dedicated, independent microservice (e.g., using Triton Inference Server or BentoML) connected via a high-performance message queue (like Redis or RabbitMQ) would allow independent scaling of the web API (scale-out) and the model inference workers (scale-up), maximizing resource utilization and guaranteeing stable near real-time performance.
+3. **Edge-Assisted Surveillance & On-Device Deployment:** Adapting our near real-time pipeline for low-power edge hardware (such as NVIDIA Jetson Orin Nano embedded boards or smart camera SoCs) would enable localized, decentralized threat detection directly at the camera node. Processing spatial detection and 1D-CNN temporal inference locally on edge devices significantly reduces network bandwidth consumption and operational latency, guaranteeing resilient threat monitoring even during central network outages.
+4. **TensorRT Quantization:** Compiling the YOLOv8 and 1D-CNN weights into INT8 precision using NVIDIA TensorRT would reduce inference latency below 8 ms per frame, further maximizing throughput on embedded hardware.
+5. **Decoupled Inference Microservice Architecture:** Currently, the deep learning ONNX models (YOLOv8 custom and person detectors) and the 1D-CNN classifier run inside the main FastAPI application process. Under heavy stream loads, this creates resource contention between network I/O (handling WebSockets, HTTP REST requests, database connection pools) and compute-heavy matrix multiplications, increasing latency. Separating the model inference pipeline into a dedicated, independent microservice (e.g., using Triton Inference Server or BentoML) connected via a high-performance message queue (like Redis or RabbitMQ) would allow independent scaling of the web API (scale-out) and the model inference workers (scale-up), maximizing resource utilization and guaranteeing stable near real-time performance.
 
 
 ---
