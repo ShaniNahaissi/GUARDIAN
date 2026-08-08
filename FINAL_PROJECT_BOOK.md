@@ -1,28 +1,30 @@
+<div align="center">
+
 # GUARDIAN
+
 ## Near Real-Time Multi-Modal Threat and Behavioral Detection in Surveillance Video Streams Using Optimized YOLOv8, ByteTrack, and Temporal 1D-CNN Networks
 
----
+by
 
-### Cover Page & Preliminaries
+**Shani Nahaissi, Agam Copel, Ameet Sokolic, and Eran Shahaf**
 
-```
-========================================================================================
-                                 FINAL PROJECT BOOK
-                   SUBMITTED IN PARTIAL FULFILLMENT OF THE REQUIREMENTS
-                         FOR THE DEGREE OF BACHELOR OF SCIENCE
-                                  IN COMPUTER SCIENCE
-                          (SPECIALIZATION IN DEEP LEARNING)
+Approved by the supervisor: [Insert Supervisor Name]
 
-TITLE:       GUARDIAN: Near Real-Time Multi-Modal Threat and Behavioral Detection in 
-             Surveillance Video Streams Using Optimized YOLOv8, ByteTrack, 
-             and Temporal 1D-CNN Networks
+Submitted to the Computer Science Faculty of College of Management
+August 2026
+Rishon LeZion
 
-AUTHOR(S):   Undergraduate Candidate, Computer Science Faculty
-SUPERVISOR:  Academic Supervisor, Department of Computer Science
-FACULTY:     Faculty of Computer Science
-DATE:        August 2026
-========================================================================================
-```
+</div>
+
+<!-- pagebreak -->
+
+### Acknowledgments
+
+We would like to express our deepest gratitude to our project supervisor for their invaluable guidance, technical insight, and unwavering support throughout the research, design, and implementation of GUARDIAN.
+
+We also extend our sincere appreciation to the Computer Science Faculty at the College of Management for providing the academic foundation, resources, and environment necessary to complete this work. Finally, we thank our team members, peers, and families for their continuous encouragement and collaboration.
+
+<!-- pagebreak -->
 
 #### Executive Summary
 
@@ -844,4 +846,3 @@ ls -lh ../trained_model/temporal_action_weights.npz
 ```
 
 ---
-*End of Final Project Book.*

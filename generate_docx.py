@@ -22,8 +22,10 @@ def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
         tcMar.append(node)
     tcPr.append(tcMar)
 
-def add_styled_paragraph(doc, text, style='Normal', space_after=6, line_spacing=1.15):
+def add_styled_paragraph(doc, text, style='Normal', space_after=6, line_spacing=1.15, is_centered=False):
     p = doc.add_paragraph(style=style)
+    if is_centered:
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_after = Pt(space_after)
     p.paragraph_format.line_spacing = line_spacing
     
@@ -217,11 +219,29 @@ def convert_md_to_docx(md_path, output_docx_path):
             doc.add_paragraph() # spacing after table
         table_lines = []
 
+    in_code_block = False
+    code_lines = []
+    in_table = False
+    table_lines = []
+    is_centered = False
+
     for l in lines:
         line = l.rstrip('\r\n')
 
-        # Code block toggle
-        if line.strip().startswith('```'):
+        if "End of Final Project Book" in line:
+            continue
+
+        if "<!-- pagebreak -->" in line or "\\pagebreak" in line:
+            doc.add_page_break()
+            continue
+
+        if '<div align="center">' in line or "<div align='center'>" in line:
+            is_centered = True
+            continue
+
+        if '</div>' in line:
+            is_centered = False
+            continue
             if in_code_block:
                 flush_code_block()
                 in_code_block = False
@@ -250,26 +270,36 @@ def convert_md_to_docx(md_path, output_docx_path):
         # Headings
         if line.startswith('# '):
             p = doc.add_heading(line[2:].strip(), level=0)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(18)
             p.paragraph_format.space_after = Pt(6)
             continue
         elif line.startswith('## '):
             p = doc.add_heading(line[3:].strip(), level=1)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(14)
             p.paragraph_format.space_after = Pt(6)
             continue
         elif line.startswith('### '):
             p = doc.add_heading(line[4:].strip(), level=2)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(12)
             p.paragraph_format.space_after = Pt(4)
             continue
         elif line.startswith('#### '):
             p = doc.add_heading(line[5:].strip(), level=3)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(10)
             p.paragraph_format.space_after = Pt(4)
             continue
         elif line.startswith('##### '):
             p = doc.add_heading(line[6:].strip(), level=4)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(8)
             p.paragraph_format.space_after = Pt(2)
             continue
@@ -308,7 +338,7 @@ def convert_md_to_docx(md_path, output_docx_path):
                         run.font.size = Pt(9.5)
                         run.font.color.rgb = RGBColor(0x52, 0x52, 0x52)
                     continue
-            add_styled_paragraph(doc, line.strip(), style='Normal', space_after=6)
+            add_styled_paragraph(doc, line.strip(), style='Normal', space_after=6, is_centered=is_centered)
 
     try:
         doc.save(output_docx_path)

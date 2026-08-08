@@ -96,8 +96,10 @@ def add_header_footer(doc):
     fldSimple2 = parse_xml(r'<w:fldSimple %s w:instr="NUMPAGES"/>' % nsdecls('w'))
     fp._p.append(fldSimple2)
 
-def add_styled_paragraph(doc, text, style='Normal', space_before=0, space_after=5, line_spacing=1.18):
+def add_styled_paragraph(doc, text, style='Normal', space_before=0, space_after=5, line_spacing=1.18, is_centered=False):
     p = doc.add_paragraph(style=style)
+    if is_centered:
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_before = Pt(space_before)
     p.paragraph_format.space_after = Pt(space_after)
     p.paragraph_format.line_spacing = line_spacing
@@ -335,11 +337,29 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
             
         table_lines = []
 
+    in_code_block = False
+    code_lines = []
+    in_table = False
+    table_lines = []
+    is_centered = False
+
     for l in lines:
         line = l.rstrip('\r\n')
 
-        # Code block toggle
-        if line.strip().startswith('```'):
+        if "End of Final Project Book" in line:
+            continue
+
+        if "<!-- pagebreak -->" in line or "\\pagebreak" in line:
+            doc.add_page_break()
+            continue
+
+        if '<div align="center">' in line or "<div align='center'>" in line:
+            is_centered = True
+            continue
+
+        if '</div>' in line:
+            is_centered = False
+            continue
             if in_code_block:
                 flush_code_block()
                 in_code_block = False
@@ -370,6 +390,8 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
         # Headings (Strictly preserving original text and levels)
         if line.startswith('# '):
             p = doc.add_heading(line[2:].strip(), level=0)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(20)
             p.paragraph_format.space_after = Pt(8)
             for r in p.runs:
@@ -380,6 +402,8 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
             continue
         elif line.startswith('## '):
             p = doc.add_heading(line[3:].strip(), level=1)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(16)
             p.paragraph_format.space_after = Pt(6)
             for r in p.runs:
@@ -390,6 +414,8 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
             continue
         elif line.startswith('### '):
             p = doc.add_heading(line[4:].strip(), level=2)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(14)
             p.paragraph_format.space_after = Pt(4)
             for r in p.runs:
@@ -400,6 +426,8 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
             continue
         elif line.startswith('#### '):
             p = doc.add_heading(line[5:].strip(), level=3)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(12)
             p.paragraph_format.space_after = Pt(3)
             for r in p.runs:
@@ -410,6 +438,8 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
             continue
         elif line.startswith('##### '):
             p = doc.add_heading(line[6:].strip(), level=4)
+            if is_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(10)
             p.paragraph_format.space_after = Pt(2)
             for r in p.runs:
@@ -453,7 +483,7 @@ def convert_md_to_styled_docx(md_path, output_docx_path):
                         run.font.italic = True
                         run.font.color.rgb = COLOR_MUTED
                     continue
-            add_styled_paragraph(doc, line.strip(), style='Normal', space_after=5, line_spacing=1.18)
+            add_styled_paragraph(doc, line.strip(), style='Normal', space_after=5, line_spacing=1.18, is_centered=is_centered)
 
     try:
         doc.save(output_docx_path)
