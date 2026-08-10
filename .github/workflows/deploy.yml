@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - project-book
 
 jobs:
   deploy:

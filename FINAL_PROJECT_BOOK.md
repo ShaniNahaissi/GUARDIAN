@@ -20,9 +20,7 @@ Rishon LeZion
 
 ### Acknowledgments
 
-We would like to express our deepest gratitude to our project supervisor for their invaluable guidance, technical insight, and unwavering support throughout the research, design, and implementation of GUARDIAN.
-
-We also extend our sincere appreciation to the Computer Science Faculty at the College of Management for providing the academic foundation, resources, and environment necessary to complete this work. Finally, we thank our team members, peers, and families for their continuous encouragement and collaboration.
+We would like to thank our project supervisor for their invaluable guidance and support throughout the development of GUARDIAN. We are also grateful to Doron from the IT team for his technical assistance, and to the Computer Science Faculty at the College of Management for providing the resources to complete this work. Finally, we want to acknowledge the dedicated teamwork and great collaboration among us that brought this project to life.
 
 <!-- pagebreak -->
 
@@ -307,9 +305,9 @@ Figure 3.2: PostgreSQL Database Schema and Entity-Relationship Diagram
 Real-world surveillance datasets (like UCF-Crime) are heavily unbalanced. They contain mostly normal background footage and only brief, sparse intervals of threat actions like Shooting or Violence. If trained on raw, unmodified streaming windows, deep learning sequence classifiers will heavily overfit to the normal background class and ignore threats.
 
 To balance class representation and make the network robust, GUARDIAN implements several data engineering techniques:
-* **Adaptive Frame Striding:** During dataset sequence building (`dataset_builder.py`), under-represented threat actions (Shooting, Violence) are sampled densely using a very low frame stride (e.g., `FRAME_STEP = 1` or `2` frames). This captures high-frequency movement. In contrast, common normal behavior is sampled sparsely using a higher stride (e.g., `FRAME_STEP = 15` or `30`), extracting fewer but more diverse sequence windows from the same background footage.
-* **Minority Class Augmentation:** Labeled threat sequences undergo temporal and kinetic augmentations. We apply random time-warping (randomly duplicating or dropping frames to simulate variable CCTV frame rates), spatial cutout, and Gaussian noise to ensure the model generalizes across camera setups.
-* **Loss Normalization:** Cross-entropy classification loss is calculated using weighted targets to penalize false negatives on Shooting and Violence actions more heavily than false alarms on Normal sequences.
+* **Frame Striding & Adaptive Idle Skipping:** During dataset sequence building (`dataset_builder.py`), frames are extracted using a uniform sequence step (`DEFAULT_STRIDE = 15`), capturing 30-frame rolling feature windows across tracks. To prevent processing idle background video, `dataset_builder.py` uses adaptive two-speed frame skipping (`iter_frames_adaptive`), stepping rapidly through idle stretches while maintaining fine-grained sampling once active suspect or weapon tracks are detected.
+* **CCTV Distortion Augmentation:** To ensure robust spatial detection across diverse camera setups, image-level surveillance augmentations (`MotionBlur`, `GaussNoise`, `Perspective`, `ImageCompression`) are applied to video frame images during spatial model training (`GUARDIAN_POC.ipynb`) and backend stream preprocessing (`VideoStyleAugmentor` in `augmentation.py`).
+* **Cross-Entropy Classification Loss:** Sequence classification is trained using standard cross-entropy loss (`nn.CrossEntropyLoss()`) over the extracted 12-dimensional spatio-kinetic-proximity vectors, optimizing probability distributions across Normal, Shooting, and Violence action states.
 
 ---
 
@@ -559,7 +557,7 @@ All experiments and tests were run on a dedicated workstation.
 | **Web Infrastructure** | FastAPI 0.110.0, Uvicorn 0.28.0, Node.js v20.11.0, React 19, Vite 5.1 |
 
 ##### 4.1.1. Dataset Splits and Training Setup
-* **YOLOv8 Threat Detector:** The unified weapon dataset (14,850 images) was split into 80% Train (11,880), 10% Val (1,485), and 10% Test (1,485). The model was trained using SGD with a learning rate of 0.01 and mosaic augmentations for 150 epochs.
+* **YOLOv8 Threat Detector:** The unified weapon dataset (14,850 images) was split into training and validation sets (with 1,485 validation images evaluated via `evaluate.py` and `images/val`). The spatial model was trained using a YOLOv8 baseline with an auto/SGD optimizer (learning rate 0.01) and CCTV image augmentations for 15 epochs.
 * **1D-CNN Action Classifier:** We used 29,053 feature sequences split into 70% Train (20,335), 15% Val (4,357), and 15% Test (4,361). Training was performed with the Adam optimizer (learning rate 0.001, batch size 32) for up to 300 epochs with early stopping patience of 8 (halting at epoch 49).
 
 ---
