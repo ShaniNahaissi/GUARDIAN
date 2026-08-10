@@ -84,7 +84,22 @@ class StreamTrackSmoother:
             lost_track_buffer=_LOST_TRACK_BUFFER,
         )
         self.active_tracks: dict[int, TrackState] = {}
+        self.prev_boxes: dict[int, list[int]] = {}
         self.lock = threading.Lock()
+
+    def smooth_box(self, track_id: int, raw_box: list[int], alpha: float = 0.60) -> list[int]:
+        """Applies exponential moving average (EMA) coordinate smoothing to bounding boxes
+        as shown in Code Snippet 3.2 of the project book."""
+        if track_id not in self.prev_boxes:
+            self.prev_boxes[track_id] = raw_box
+            return raw_box
+        prev = self.prev_boxes[track_id]
+        smoothed = [
+            int(alpha * raw + (1.0 - alpha) * p)
+            for raw, p in zip(raw_box, prev)
+        ]
+        self.prev_boxes[track_id] = smoothed
+        return smoothed
 
     def update_with_detections(self, detections: sv.Detections) -> list[dict[str, Any]]:
         with self.lock:
