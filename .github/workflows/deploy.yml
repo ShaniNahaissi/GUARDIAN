@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - project-book
+      - fix/model_augmentation_and_loss
 
 jobs:
   deploy:
