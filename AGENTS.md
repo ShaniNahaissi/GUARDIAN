@@ -14,7 +14,7 @@ Guardian is a proof-of-concept **near real-time monitoring** app: camera or loca
 | API | FastAPI | REST under **`/api/*`**, health, camera CRUD, stream meta |
 | Streams | FastAPI + Starlette | **`WS /producer/{id}`** ingest (JPEG bytes); **`WS /consumer/{id}`** processed JPEG + track JSON; **`GET /consumer/{id}/frame`** JPEG snapshot |
 | Inference | ONNX Runtime, supervision ByteTrack, NumPy CNN | Decode → ONNX → tracker smoothing → temporal feature extraction → CNN action classification → draw → broadcast |
-| Deploy | Docker, nginx (frontend image), Dozzle | TLS backend; nginx proxies `/api`, `/producer`, `/consumer`, `/health`; Dozzle visual logs UI |
+| Deploy | Docker, nginx (frontend image) | TLS backend; nginx proxies `/api`, `/producer`, `/consumer`, `/health` |
 
 **Critical path**: Producer and consumer must share the **same `stream_id`**. Consumer sockets receive frames only after the producer has sent at least one decodable image for that id.
 
@@ -80,5 +80,5 @@ Guardian is a proof-of-concept **near real-time monitoring** app: camera or loca
 
 ### Observability
 - [x] Near real-time metrics dashboard: process latency, input/output bytes, track sizes, CPU utilization, VRAM usage, and active threat log filters.
-- [x] Visual logs UI integration (Dozzle) running on port `9999`.
+- [x] Standard docker container stdout/stderr log capture.
 - [ ] Optional OpenTelemetry for FastAPI.

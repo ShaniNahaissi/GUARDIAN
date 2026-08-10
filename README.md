@@ -19,15 +19,10 @@ GUARDIAN is an intelligent near real-time video analytics system designed for th
 
 ## Production Stack
 
-To build and run the production stack (Postgres + Backend API + Nginx SSL proxy + Dozzle Logs Dashboard):
+To build and run the production stack (Postgres + Backend API + Nginx SSL proxy):
 ```bash
 docker compose -f docker-compose.yml up --build
 ```
-
-### Visual Logs UI (Dozzle)
-In production, a near real-time visual log viewer dashboard is deployed automatically. Open your browser and navigate to:
-- **`http://<server-ip>:9999`**
-Here you can filter, search, and monitor streaming inference latency (FPS/process ms), CPU utilization, VRAM usage, and active threat alert logs.
 
 ## Note on Documentation
 The `old/` directory contains legacy/older versions of documentation (such as `old/GUARDIAN_Final_Project_Book.docx`). The current compiled Word document is `GUARDIAN_Final_Project_Book_New.docx` at the root.
