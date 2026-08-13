@@ -7,7 +7,7 @@ import os
 import threading
 import time
 import urllib.request
-from typing import Any
+from bl.detection.config import ACTION_CONF_THRESHOLD
 
 logger = logging.getLogger("guardian.sms")
 
@@ -65,12 +65,16 @@ async def send_telegram_alert(message: str) -> bool:
 
 async def dispatch_threat_sms(camera_id: str, camera_name: str, threat_type: str, confidence: float) -> None:
     """Main threat alert dispatcher. Evaluates 2-second per-camera cooldown and dispatches instant Telegram push notification."""
+    conf_val = confidence if confidence <= 1.0 else confidence / 100.0
+    if conf_val < ACTION_CONF_THRESHOLD or threat_type == "Normal":
+        return
+
     if not can_send_sms(camera_id):
         logger.debug("sms.cooldown_active camera_id=%s threat=%s", camera_id, threat_type)
         return
 
     display_name = camera_name or camera_id
-    conf_pct = int(confidence * 100) if confidence <= 1.0 else int(confidence)
+    conf_pct = int(conf_val * 100)
     msg = f"🚨 GUARDIAN ALERT: Active threat '{threat_type}' ({conf_pct}%) detected on camera '{display_name}' ({camera_id})!"
 
     success = await send_telegram_alert(msg)

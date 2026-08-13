@@ -17,7 +17,7 @@ from bl.detection.tracker import remove_byte_tracker
 from bl.metrics_service import save_metrics_to_db
 from bl.rbac import CAMERAS_READ
 from dependencies.security import require_permission
-from models.user import User
+from bl.detection.config import ACTION_CONF_THRESHOLD
 from sms_service import dispatch_threat_sms
 
 logger = logging.getLogger("guardian.audit")
@@ -102,7 +102,7 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
             for seq_info in eval_seqs:
                 act = seq_info.get("action_label", "Normal")
                 conf = seq_info.get("action_confidence", 1.0)
-                if act and act != "Normal":
+                if act and act != "Normal" and conf >= ACTION_CONF_THRESHOLD:
                     asyncio.create_task(
                         dispatch_threat_sms(
                             camera_id=stream_id,
