@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import os
 import re
 import threading
 import time
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -32,6 +34,7 @@ def get_cooldown_seconds() -> float:
 def normalize_phone_number(raw: str) -> str:
     """Normalizes phone numbers, with specific rules for Israeli phone numbers:
     - 0501234567 / 054-123-4567 -> +972501234567 / +972541234567
+    - +9720503533040 -> +972503533040
     - 972501234567 -> +972501234567
     - 031234567 -> +97231234567
     - Numbers already starting with '+' are sanitized to retain valid digits.
@@ -49,6 +52,10 @@ def normalize_phone_number(raw: str) -> str:
     digits = re.sub(r"\D", "", s)
     if not digits:
         return ""
+
+    # Strip redundant leading zero after country code 972 (e.g. 972050... -> 97250...)
+    if digits.startswith("9720"):
+        digits = "972" + digits[4:]
 
     # Israeli local number starting with '0' (e.g., 0501234567, 039876543)
     if s.startswith("0") or (not has_plus and digits.startswith("0")):
@@ -94,6 +101,65 @@ def can_send_sms(camera_id: str) -> bool:
             return False
         _last_sent_timestamp[camera_id] = now
         return True
+
+
+def _send_twilio_sms_sync(to_phone: str, message: str) -> bool:
+    """Dispatches SMS text message directly to Twilio REST API / Client SDK."""
+    account_sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+    auth_token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+    from_number = os.environ.get("TWILIO_FROM_NUMBER", "+972539508482").strip()
+
+    if not account_sid or not auth_token:
+        logger.warning("sms.twilio_missing_credentials account_sid_present=%s", bool(account_sid))
+        return False
+
+    # 1. Try official Twilio SDK if available
+    try:
+        from twilio.rest import Client
+        client = Client(account_sid, auth_token)
+        msg = client.messages.create(
+            to=to_phone,
+            from_=from_number,
+            body=message,
+        )
+        logger.info("sms.twilio_sdk_success sid=%s to=%s", getattr(msg, "sid", "sent"), to_phone)
+        return True
+    except ImportError:
+        pass
+    except Exception as exc:
+        logger.warning("sms.twilio_sdk_error to=%s error=%s, attempting direct REST fallback", to_phone, exc)
+
+    # 2. Zero-dependency direct Twilio REST API fallback via urllib
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+    post_data = urllib.parse.urlencode({
+        "To": to_phone,
+        "From": from_number,
+        "Body": message,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(url, data=post_data, method="POST")
+    creds = f"{account_sid}:{auth_token}"
+    encoded_creds = base64.b64encode(creds.encode("utf-8")).decode("utf-8")
+    req.add_header("Authorization", f"Basic {encoded_creds}")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body_res = resp.read().decode("utf-8")
+            logger.info("sms.twilio_rest_success to=%s status=%s body=%s", to_phone, resp.status, body_res[:100])
+            return 200 <= resp.status < 300
+    except Exception as exc:
+        logger.error("sms.twilio_rest_error to=%s error=%s", to_phone, exc)
+        return False
+
+
+async def send_sms_twilio(recipients: list[str], message: str) -> bool:
+    """Dispatches SMS alert to all recipients via Twilio."""
+    results: list[bool] = []
+    for phone in recipients:
+        success = await asyncio.to_thread(_send_twilio_sms_sync, phone, message)
+        results.append(success)
+    return any(results)
 
 
 def _post_webhook_sync(url: str, payload: dict[str, Any]) -> bool:
@@ -183,7 +249,7 @@ async def get_target_recipients_for_camera(camera_id: str) -> list[str]:
 
 async def dispatch_threat_sms(camera_id: str, camera_name: str, threat_type: str, confidence: float) -> None:
     """Main threat alert dispatcher. Evaluates cooldown, resolves target phone numbers,
-    and sends SMS via generic Webhook."""
+    and sends SMS directly via Twilio (or Webhook as fallback)."""
     if not can_send_sms(camera_id):
         logger.debug("sms.cooldown_active camera_id=%s threat=%s", camera_id, threat_type)
         return
@@ -204,4 +270,10 @@ async def dispatch_threat_sms(camera_id: str, camera_name: str, threat_type: str
         "confidence": confidence,
     }
 
-    await send_sms_webhook(recipients, msg, meta)
+    account_sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+    auth_token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+
+    if account_sid and auth_token:
+        await send_sms_twilio(recipients, msg)
+    else:
+        await send_sms_webhook(recipients, msg, meta)
