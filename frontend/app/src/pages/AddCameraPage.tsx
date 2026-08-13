@@ -6,23 +6,32 @@ import { addCamera } from '../services/dataService';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 
+import { PhoneInput } from '../components/atoms/PhoneInput';
+
 interface AddCameraPageProps {
   onBack: () => void;
 }
 
 export const AddCameraPage: React.FC<AddCameraPageProps> = ({ onBack }) => {
-  const { canWriteCameras } = useAuth();
+  const { canWriteCameras, user } = useAuth();
   const [serverName, setServerName] = useState('');
   const [consumerBackendBase, setConsumerBackendBase] = useState('');
   const [streamUuid, setStreamUuid] = useState('');
+  const [ownerPhone, setOwnerPhone] = useState(user?.primaryPhone || '');
+  const [additionalPhone, setAdditionalPhone] = useState(user?.additionalPhone || '');
   const { showToast } = useToast();
 
   useEffect(() => {
     if (!canWriteCameras) {
       showToast('You do not have permission to add servers.', 'error');
       onBack();
+      return;
     }
-  }, [canWriteCameras, onBack, showToast]);
+    if (user) {
+      if (user.primaryPhone && !ownerPhone) setOwnerPhone(user.primaryPhone);
+      if (user.additionalPhone && !additionalPhone) setAdditionalPhone(user.additionalPhone);
+    }
+  }, [canWriteCameras, onBack, showToast, user, ownerPhone, additionalPhone]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +39,8 @@ export const AddCameraPage: React.FC<AddCameraPageProps> = ({ onBack }) => {
       name: serverName.trim(),
       streamUuid: streamUuid.trim(),
       consumerBackendBase: consumerBackendBase.trim(),
+      primaryPhone: ownerPhone.trim(),
+      additionalPhone: additionalPhone.trim(),
     });
     if (success) {
       showToast('Server added successfully!', 'success');
@@ -73,6 +84,20 @@ export const AddCameraPage: React.FC<AddCameraPageProps> = ({ onBack }) => {
               placeholder="e.g. Main entrance edge"
             />
           </div>
+
+          <PhoneInput
+            label="Owner Phone Number (Pre-filled from account)"
+            value={ownerPhone}
+            onChange={setOwnerPhone}
+            placeholder="050-123-4567"
+          />
+
+          <PhoneInput
+            label="Additional Alert Phone Numbers (Pre-filled from account)"
+            value={additionalPhone}
+            onChange={setAdditionalPhone}
+            placeholder="052-987-6543"
+          />
 
           <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-4 space-y-4">
             <div>

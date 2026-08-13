@@ -17,6 +17,8 @@ def _to_info(camera: Camera) -> CameraInfo:
         statusText=camera.statusText,
         imageUrl=camera.imageUrl,
         time=camera.time,
+        primaryPhone=getattr(camera, "primaryPhone", "") or "",
+        additionalPhone=getattr(camera, "additionalPhone", "") or "",
     )
 
 
@@ -35,11 +37,16 @@ async def add_camera(payload: CameraCreateRequest) -> JSONResponse:
             count = await session.scalar(select(func.count()).select_from(Camera))
             camera_id = f"CAM-{(count or 0) + 1:03d}"
 
+        p_phone = (payload.primaryPhone if payload.primaryPhone is not None else payload.primary_phone) or ""
+        a_phone = (payload.additionalPhone if payload.additionalPhone is not None else payload.additional_phone) or ""
+
         session.add(Camera(
             id=camera_id,
             name=payload.name,
             location=payload.location or "",
             imageUrl=(payload.imageUrl or "").strip(),
+            primaryPhone=p_phone.strip(),
+            additionalPhone=a_phone.strip(),
         ))
         await session.commit()
     return JSONResponse({"ok": True, "id": camera_id})
@@ -56,6 +63,14 @@ async def update_camera(camera_id: str, payload: CameraUpdateRequest) -> JSONRes
             camera.location = payload.location
         if payload.imageUrl is not None:
             camera.imageUrl = payload.imageUrl
+        if payload.primaryPhone is not None:
+            camera.primaryPhone = payload.primaryPhone.strip()
+        elif payload.primary_phone is not None:
+            camera.primaryPhone = payload.primary_phone.strip()
+        if payload.additionalPhone is not None:
+            camera.additionalPhone = payload.additionalPhone.strip()
+        elif payload.additional_phone is not None:
+            camera.additionalPhone = payload.additional_phone.strip()
         await session.commit()
     return JSONResponse({"ok": True})
 

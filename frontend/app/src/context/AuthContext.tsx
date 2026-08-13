@@ -19,6 +19,8 @@ export interface User {
   role: AppRole;
   name: string;
   roleLabel: string;
+  primaryPhone?: string;
+  additionalPhone?: string;
 }
 
 const ROLE_LABELS: Record<AppRole, string> = {
@@ -40,6 +42,8 @@ function toContextUser(u: AuthUser): User {
     role,
     name: u.fullName || u.username,
     roleLabel: ROLE_LABELS[role],
+    primaryPhone: u.primaryPhone || '',
+    additionalPhone: u.additionalPhone || '',
   };
 }
 
@@ -47,7 +51,13 @@ interface AuthContextType {
   user: User | null;
   login: (username: string, pass: string) => Promise<boolean>;
   logout: () => void;
-  register: (username: string, pass: string, name: string) => Promise<boolean>;
+  register: (
+    username: string,
+    pass: string,
+    name: string,
+    primaryPhone?: string,
+    additionalPhone?: string
+  ) => Promise<boolean>;
   authError: string | null;
   clearAuthError: () => void;
   canWriteCameras: boolean;
@@ -121,7 +131,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
   };
 
-  const register = async (username: string, pass: string, name: string): Promise<boolean> => {
+  const register = async (
+    username: string,
+    pass: string,
+    name: string,
+    primaryPhone?: string,
+    additionalPhone?: string
+  ): Promise<boolean> => {
     setAuthError(null);
     if (!isBackendEnabled()) {
       if (!username || !pass || !name) return false;
@@ -131,11 +147,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         name,
         role: 'viewer',
         roleLabel: ROLE_LABELS.viewer,
+        primaryPhone: primaryPhone || '',
+        additionalPhone: additionalPhone || '',
       });
       return true;
     }
     try {
-      const res = await registerRequest(username, pass, name);
+      const res = await registerRequest(username, pass, name, primaryPhone, additionalPhone);
       setStoredAccessToken(res.access_token);
       setUser(toContextUser(res.user));
       return true;

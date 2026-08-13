@@ -14,6 +14,8 @@ export interface CameraInfo {
   statusText: string;
   imageUrl: string;
   time: string;
+  primaryPhone?: string;
+  additionalPhone?: string;
 }
 
 export interface SystemStats {
@@ -212,6 +214,8 @@ export const addCamera = async (cameraData: AddCameraPayload): Promise<boolean> 
     location,
     imageUrl: explicitImage || undefined,
     streamUuid: streamUuid || undefined,
+    primaryPhone: cameraData.primaryPhone || undefined,
+    additionalPhone: cameraData.additionalPhone || undefined,
   };
 
   if (isBackendEnabled()) {

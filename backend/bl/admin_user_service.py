@@ -29,11 +29,15 @@ async def create_user(session: AsyncSession, body: AdminCreateUser) -> AdminUser
         raise HTTPException(status_code=400, detail="Username required")
     if await fetch_by_username(session, uname) is not None:
         raise HTTPException(status_code=409, detail="Username already taken")
+    primary_p = (body.primaryPhone if body.primaryPhone is not None else body.primary_phone) or ""
+    additional_p = (body.additionalPhone if body.additionalPhone is not None else body.additional_phone) or ""
     user = User(
         username=uname,
         full_name=(body.full_name or uname).strip(),
         password_hash=hash_password(body.password),
         role=body.role,
+        primary_phone=primary_p.strip(),
+        additional_phone=additional_p.strip(),
     )
     session.add(user)
     await session.commit()
@@ -58,6 +62,16 @@ async def update_user(session: AsyncSession, user_id: uuid.UUID, body: AdminUpda
 
     if body.password is not None:
         target.password_hash = hash_password(body.password)
+
+    if body.primaryPhone is not None:
+        target.primary_phone = body.primaryPhone.strip()
+    elif body.primary_phone is not None:
+        target.primary_phone = body.primary_phone.strip()
+
+    if body.additionalPhone is not None:
+        target.additional_phone = body.additionalPhone.strip()
+    elif body.additional_phone is not None:
+        target.additional_phone = body.additional_phone.strip()
 
     await session.commit()
     await session.refresh(target)

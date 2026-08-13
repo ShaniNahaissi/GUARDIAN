@@ -18,6 +18,7 @@ from bl.metrics_service import save_metrics_to_db
 from bl.rbac import CAMERAS_READ
 from dependencies.security import require_permission
 from models.user import User
+from sms_service import dispatch_threat_sms
 
 logger = logging.getLogger("guardian.audit")
 
@@ -80,6 +81,7 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
             await store.update(stream_id, payload, jpeg_bytes, detections, track_payload["tracks"])
             await connection_manager.broadcast_frame(stream_id, jpeg_bytes, track_payload)
 
+            eval_seqs = track_payload.get("evaluated_sequences", [])
             asyncio.create_task(
                 save_metrics_to_db(
                     stream_id=stream_id,
@@ -93,9 +95,22 @@ async def producer_websocket(websocket: WebSocket, stream_id: str) -> None:
                     detections_json=track_payload["tracks"],
                     cpu_utilization=metrics_tracker.get_cpu_utilization(),
                     gpu_vram_used=metrics_tracker.get_gpu_vram()[0],
-                    evaluated_sequences=track_payload.get("evaluated_sequences", []),
+                    evaluated_sequences=eval_seqs,
                 )
             )
+
+            for seq_info in eval_seqs:
+                act = seq_info.get("action_label", "Normal")
+                conf = seq_info.get("action_confidence", 1.0)
+                if act and act != "Normal":
+                    asyncio.create_task(
+                        dispatch_threat_sms(
+                            camera_id=stream_id,
+                            camera_name=stream_id,
+                            threat_type=act,
+                            confidence=conf,
+                        )
+                    )
 
             if frame_count % 30 == 0:
                 stats = metrics_tracker.get_all_metrics()

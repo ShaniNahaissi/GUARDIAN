@@ -18,3 +18,5 @@ class Camera(Base):
     statusText: Mapped[str] = mapped_column(String(32), nullable=False, default="NORMAL")
     imageUrl: Mapped[str] = mapped_column(String(1024), nullable=False, default="")
     time: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    primaryPhone: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    additionalPhone: Mapped[str] = mapped_column(String(256), nullable=False, default="")
