@@ -51,5 +51,8 @@ async def init_db() -> None:
     from models.camera import Camera  # noqa: F401 — register ORM metadata
 
     async with engine.begin() as conn:
-        await conn.run_sync(_drop_tables_with_schema_mismatch, (FrameMetric.__table__, SequenceMetric.__table__))
+        await conn.run_sync(
+            _drop_tables_with_schema_mismatch,
+            (FrameMetric.__table__, SequenceMetric.__table__, User.__table__, Camera.__table__),
+        )
         await conn.run_sync(Base.metadata.create_all)

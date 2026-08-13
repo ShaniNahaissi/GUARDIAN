@@ -6,6 +6,8 @@ export interface AdminUserRow {
   username: string;
   fullName: string;
   role: AppRole;
+  primaryPhone?: string;
+  additionalPhone?: string;
   createdAt: string | null;
 }
 
@@ -40,6 +42,10 @@ export async function createAdminUser(payload: {
   password: string;
   full_name: string;
   role: AppRole;
+  primary_phone?: string;
+  additional_phone?: string;
+  primaryPhone?: string;
+  additionalPhone?: string;
 }): Promise<AdminUserRow> {
   const res = await fetch(`${getBackendUrl()}/admin/users`, {
     method: 'POST',
@@ -52,7 +58,15 @@ export async function createAdminUser(payload: {
 
 export async function updateAdminUser(
   id: string,
-  payload: { full_name?: string; role?: AppRole; password?: string }
+  payload: {
+    full_name?: string;
+    role?: AppRole;
+    password?: string;
+    primary_phone?: string;
+    additional_phone?: string;
+    primaryPhone?: string;
+    additionalPhone?: string;
+  }
 ): Promise<AdminUserRow> {
   const res = await fetch(`${getBackendUrl()}/admin/users/${encodeURIComponent(id)}`, {
     method: 'PATCH',

@@ -4,12 +4,16 @@ import { Shield } from 'lucide-react';
 import { Button } from '../components/atoms/Button';
 import { Card } from '../components/atoms/Card';
 
+import { PhoneInput } from '../components/atoms/PhoneInput';
+
 export const LoginPage: React.FC = () => {
   const { login, register, authError, clearAuthError } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [primaryPhone, setPrimaryPhone] = useState('');
+  const [additionalPhone, setAdditionalPhone] = useState('');
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,7 +23,7 @@ export const LoginPage: React.FC = () => {
       if (isLogin) {
         await login(username, password);
       } else {
-        await register(username, password, name);
+        await register(username, password, name, primaryPhone, additionalPhone);
       }
     } finally {
       setBusy(false);
@@ -40,16 +44,30 @@ export const LoginPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
-            <div>
-              <label className="block text-sm font-medium text-guardian-muted mb-1">Full Name</label>
-              <input 
-                type="text" 
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-guardian-accent"
-                required={!isLogin}
+            <>
+              <div>
+                <label className="block text-sm font-medium text-guardian-muted mb-1">Full Name</label>
+                <input 
+                  type="text" 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-guardian-accent"
+                  required={!isLogin}
+                />
+              </div>
+              <PhoneInput
+                label="Primary Phone Number"
+                value={primaryPhone}
+                onChange={setPrimaryPhone}
+                placeholder="050-123-4567"
               />
-            </div>
+              <PhoneInput
+                label="Additional Alert Phone Number"
+                value={additionalPhone}
+                onChange={setAdditionalPhone}
+                placeholder="052-987-6543"
+              />
+            </>
           )}
           <div>
             <label className="block text-sm font-medium text-guardian-muted mb-1">Username</label>

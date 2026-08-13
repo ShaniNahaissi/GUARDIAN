@@ -26,11 +26,15 @@ async def register(session: AsyncSession, body: RegisterRequest) -> TokenRespons
     existing = await fetch_by_username(session, uname)
     if existing is not None:
         raise HTTPException(status_code=409, detail="Username already taken")
+    primary_p = body.primaryPhone or body.primary_phone or ""
+    additional_p = body.additionalPhone or body.additional_phone or ""
     user = User(
         username=uname,
         full_name=(body.full_name or uname).strip(),
         password_hash=hash_password(body.password),
         role="viewer",
+        primary_phone=primary_p.strip(),
+        additional_phone=additional_p.strip(),
     )
     session.add(user)
     await session.commit()

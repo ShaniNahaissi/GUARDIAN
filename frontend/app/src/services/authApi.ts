@@ -9,6 +9,8 @@ export interface AuthUser {
   username: string;
   fullName: string;
   role: AppRole;
+  primaryPhone?: string;
+  additionalPhone?: string;
 }
 
 export interface TokenResponse {
@@ -51,12 +53,20 @@ export async function loginRequest(username: string, password: string): Promise<
 export async function registerRequest(
   username: string,
   password: string,
-  full_name: string
+  full_name: string,
+  primary_phone?: string,
+  additional_phone?: string
 ): Promise<TokenResponse> {
   const res = await fetch(`${getBackendUrl()}/auth/register`, {
     method: 'POST',
     headers: authJsonHeaders(),
-    body: JSON.stringify({ username, password, full_name }),
+    body: JSON.stringify({
+      username,
+      password,
+      full_name,
+      primary_phone: primary_phone || '',
+      additional_phone: additional_phone || '',
+    }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

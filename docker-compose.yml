@@ -28,6 +28,9 @@ services:
       GUARDIAN_JWT_SECRET: ${GUARDIAN_JWT_SECRET:-change-me-in-production}
       GUARDIAN_ADMIN_USERNAME: ${GUARDIAN_ADMIN_USERNAME:-Admin}
       GUARDIAN_ADMIN_PASSWORD: ${GUARDIAN_ADMIN_PASSWORD:-admin}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      SMS_COOLDOWN_SECONDS: ${SMS_COOLDOWN_SECONDS:-2}
     depends_on:
       postgres:
         condition: service_healthy

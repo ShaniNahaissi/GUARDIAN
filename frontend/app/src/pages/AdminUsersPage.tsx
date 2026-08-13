@@ -12,6 +12,7 @@ import {
 } from '../services/adminUsersApi';
 import type { AppRole } from '../services/authApi';
 import { AdminMetricsDashboard } from '../components/molecules/AdminMetricsDashboard';
+import { PhoneInput } from '../components/atoms/PhoneInput';
 
 const ROLES: AppRole[] = ['admin', 'operator', 'viewer'];
 
@@ -26,10 +27,14 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newFullName, setNewFullName] = useState('');
+  const [newPrimaryPhone, setNewPrimaryPhone] = useState('');
+  const [newAdditionalPhone, setNewAdditionalPhone] = useState('');
   const [newRole, setNewRole] = useState<AppRole>('viewer');
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<AdminUserRow | null>(null);
   const [editFullName, setEditFullName] = useState('');
+  const [editPrimaryPhone, setEditPrimaryPhone] = useState('');
+  const [editAdditionalPhone, setEditAdditionalPhone] = useState('');
   const [editRole, setEditRole] = useState<AppRole>('viewer');
   const [editPassword, setEditPassword] = useState('');
   const [activeTab, setActiveTab] = useState<'metrics' | 'users'>('metrics');
@@ -53,6 +58,8 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
   const openEdit = (u: AdminUserRow) => {
     setEditing(u);
     setEditFullName(u.fullName);
+    setEditPrimaryPhone(u.primaryPhone || '');
+    setEditAdditionalPhone(u.additionalPhone || '');
     setEditRole(u.role);
     setEditPassword('');
   };
@@ -71,11 +78,15 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
         password: newPassword,
         full_name: newFullName.trim(),
         role: newRole,
+        primary_phone: newPrimaryPhone.trim(),
+        additional_phone: newAdditionalPhone.trim(),
       });
       showToast('User created', 'success');
       setNewUsername('');
       setNewPassword('');
       setNewFullName('');
+      setNewPrimaryPhone('');
+      setNewAdditionalPhone('');
       setNewRole('viewer');
       await load();
     } catch (err) {
@@ -90,9 +101,17 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
     if (!editing) return;
     setSaving(true);
     try {
-      const payload: { full_name: string; role: AppRole; password?: string } = {
+      const payload: {
+        full_name: string;
+        role: AppRole;
+        password?: string;
+        primary_phone: string;
+        additional_phone: string;
+      } = {
         full_name: editFullName.trim(),
         role: editRole,
+        primary_phone: editPrimaryPhone.trim(),
+        additional_phone: editAdditionalPhone.trim(),
       };
       if (editPassword.trim()) payload.password = editPassword.trim();
       await updateAdminUser(editing.id, payload);
@@ -221,6 +240,18 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
                   placeholder="Optional"
                 />
               </div>
+              <PhoneInput
+                label="Primary Phone"
+                value={newPrimaryPhone}
+                onChange={setNewPrimaryPhone}
+                placeholder="050-123-4567"
+              />
+              <PhoneInput
+                label="Additional Phone"
+                value={newAdditionalPhone}
+                onChange={setNewAdditionalPhone}
+                placeholder="052-987-6543"
+              />
               <div className="flex gap-2">
                 <div className="flex-1">
                   <label className="block text-xs text-guardian-muted mb-1">Role</label>
@@ -250,6 +281,7 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
                   <tr className="border-b border-gray-800 bg-gray-900/50 text-left text-guardian-muted">
                     <th className="px-4 py-3 font-medium">Username</th>
                     <th className="px-4 py-3 font-medium">Name</th>
+                    <th className="px-4 py-3 font-medium">Primary Phone</th>
                     <th className="px-4 py-3 font-medium">Role</th>
                     <th className="px-4 py-3 font-medium hidden md:table-cell">Created</th>
                     <th className="px-4 py-3 font-medium w-32 text-right">Actions</th>
@@ -258,7 +290,7 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-guardian-muted">
+                      <td colSpan={6} className="px-4 py-8 text-center text-guardian-muted">
                         Loading…
                       </td>
                     </tr>
@@ -268,6 +300,7 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
                       <tr key={u.id} className="border-b border-gray-800/80 hover:bg-gray-900/30">
                         <td className="px-4 py-3 font-mono text-white">{u.username}</td>
                         <td className="px-4 py-3">{u.fullName}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-guardian-accent">{u.primaryPhone || '—'}</td>
                         <td className="px-4 py-3 capitalize">{u.role}</td>
                         <td className="px-4 py-3 text-guardian-muted hidden md:table-cell whitespace-nowrap">
                           {formatCreated(u.createdAt)}
@@ -294,7 +327,7 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
                     ))}
                   {!loading && rows.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-guardian-muted">
+                      <td colSpan={6} className="px-4 py-8 text-center text-guardian-muted">
                         No users found.
                       </td>
                     </tr>
@@ -316,6 +349,18 @@ export const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ onBack }) => {
                     className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-guardian-accent"
                   />
                 </div>
+                <PhoneInput
+                  label="Primary Phone Number"
+                  value={editPrimaryPhone}
+                  onChange={setEditPrimaryPhone}
+                  placeholder="050-123-4567"
+                />
+                <PhoneInput
+                  label="Additional Alert Phone Number"
+                  value={editAdditionalPhone}
+                  onChange={setEditAdditionalPhone}
+                  placeholder="052-987-6543"
+                />
                 <div>
                   <label className="block text-xs text-guardian-muted mb-1">Role</label>
                   <select

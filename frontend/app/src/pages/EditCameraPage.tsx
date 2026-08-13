@@ -6,6 +6,8 @@ import { getCameras, updateCamera } from '../services/dataService';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 
+import { PhoneInput } from '../components/atoms/PhoneInput';
+
 interface EditCameraPageProps {
   cameraId: string;
   onBack: () => void;
@@ -16,6 +18,8 @@ export const EditCameraPage: React.FC<EditCameraPageProps> = ({ cameraId, onBack
   const [serverName, setServerName] = useState('');
   const [location, setLocation] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [primaryPhone, setPrimaryPhone] = useState('');
+  const [additionalPhone, setAdditionalPhone] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const { showToast } = useToast();
 
@@ -36,6 +40,8 @@ export const EditCameraPage: React.FC<EditCameraPageProps> = ({ cameraId, onBack
             setServerName(target.name);
             setLocation(target.location || '');
             setImageUrl(target.imageUrl || '');
+            setPrimaryPhone(target.primaryPhone || '');
+            setAdditionalPhone(target.additionalPhone || '');
           } else {
             showToast('Camera not found', 'error');
             onBack();
@@ -61,6 +67,8 @@ export const EditCameraPage: React.FC<EditCameraPageProps> = ({ cameraId, onBack
       name: serverName.trim(),
       location: location.trim(),
       imageUrl: imageUrl.trim() || undefined,
+      primaryPhone: primaryPhone.trim(),
+      additionalPhone: additionalPhone.trim(),
     });
     if (success) {
       showToast('Camera updated successfully!', 'success');
@@ -113,6 +121,20 @@ export const EditCameraPage: React.FC<EditCameraPageProps> = ({ cameraId, onBack
               required 
             />
           </div>
+
+          <PhoneInput
+            label="Owner Alert Phone Number"
+            value={primaryPhone}
+            onChange={setPrimaryPhone}
+            placeholder="050-123-4567"
+          />
+
+          <PhoneInput
+            label="Additional Alert Phone Numbers"
+            value={additionalPhone}
+            onChange={setAdditionalPhone}
+            placeholder="052-987-6543"
+          />
 
           <div>
             <label className="block text-sm font-medium text-guardian-muted mb-1">Location</label>
