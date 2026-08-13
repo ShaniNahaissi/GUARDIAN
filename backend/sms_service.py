@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -45,7 +46,9 @@ def normalize_phone_number(raw: str) -> str:
     if not s:
         return ""
 
+    # Keep leading + if present
     has_plus = s.startswith("+")
+    # Remove non-digit characters
     digits = re.sub(r"\D", "", s)
     if not digits:
         return ""
@@ -100,37 +103,61 @@ def can_send_sms(camera_id: str) -> bool:
         return True
 
 
-def _send_whatsapp_sync(to_phone: str, message: str) -> bool:
-    """Dispatches WhatsApp alert message via CallMeBot WhatsApp API."""
-    api_key = os.environ.get("WHATSAPP_API_KEY", "").strip()
-    if not api_key:
-        logger.warning("sms.whatsapp_missing_key WHATSAPP_API_KEY is not set")
+def _send_twilio_sms_sync(to_phone: str, message: str) -> bool:
+    """Dispatches SMS text message directly to Twilio REST API / Client SDK."""
+    account_sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+    auth_token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+    from_number = os.environ.get("TWILIO_FROM_NUMBER", "+972539508482").strip()
+
+    if not account_sid or not auth_token:
+        logger.warning("sms.twilio_missing_credentials account_sid_present=%s", bool(account_sid))
         return False
 
-    encoded_msg = urllib.parse.quote(message)
-    # CallMeBot WhatsApp API endpoint
-    url = f"https://api.callmebot.com/whatsapp.php?phone={to_phone}&text={encoded_msg}&apikey={api_key}"
+    # 1. Try official Twilio SDK if available
+    try:
+        from twilio.rest import Client
+        client = Client(account_sid, auth_token)
+        msg = client.messages.create(
+            to=to_phone,
+            from_=from_number,
+            body=message,
+        )
+        logger.info("sms.twilio_sdk_success sid=%s to=%s", getattr(msg, "sid", "sent"), to_phone)
+        return True
+    except ImportError:
+        pass
+    except Exception as exc:
+        logger.warning("sms.twilio_sdk_error to=%s error=%s, attempting direct REST fallback", to_phone, exc)
 
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Guardian-WhatsApp/1.0"},
-        method="GET",
-    )
+    # 2. Zero-dependency direct Twilio REST API fallback via urllib
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+    post_data = urllib.parse.urlencode({
+        "To": to_phone,
+        "From": from_number,
+        "Body": message,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(url, data=post_data, method="POST")
+    creds = f"{account_sid}:{auth_token}"
+    encoded_creds = base64.b64encode(creds.encode("utf-8")).decode("utf-8")
+    req.add_header("Authorization", f"Basic {encoded_creds}")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             body_res = resp.read().decode("utf-8")
-            logger.info("sms.whatsapp_success to=%s status=%s body=%s", to_phone, resp.status, body_res[:100])
+            logger.info("sms.twilio_rest_success to=%s status=%s body=%s", to_phone, resp.status, body_res[:100])
             return 200 <= resp.status < 300
     except Exception as exc:
-        logger.error("sms.whatsapp_error to=%s error=%s", to_phone, exc)
+        logger.error("sms.twilio_rest_error to=%s error=%s", to_phone, exc)
         return False
 
 
-async def send_whatsapp_alert(recipients: list[str], message: str) -> bool:
-    """Dispatches WhatsApp alert to all target recipients."""
+async def send_sms_twilio(recipients: list[str], message: str) -> bool:
+    """Dispatches SMS alert to all recipients via Twilio."""
     results: list[bool] = []
     for phone in recipients:
-        success = await asyncio.to_thread(_send_whatsapp_sync, phone, message)
+        success = await asyncio.to_thread(_send_twilio_sms_sync, phone, message)
         results.append(success)
     return any(results)
 
@@ -220,22 +247,51 @@ async def get_target_recipients_for_camera(camera_id: str) -> list[str]:
         return fallback_recipients
 
 
+def _send_telegram_sync(token: str, chat_id: str, message: str) -> bool:
+    """Dispatches instant Telegram Bot push notification to chat_id."""
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = json.dumps({"chat_id": chat_id, "text": message}).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            logger.info("sms.telegram_success chat_id=%s status=%s", chat_id, resp.status)
+            return 200 <= resp.status < 300
+    except Exception as exc:
+        logger.error("sms.telegram_error chat_id=%s error=%s", chat_id, exc)
+        return False
+
+
+async def send_telegram_alert(message: str) -> bool:
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        return False
+    return await asyncio.to_thread(_send_telegram_sync, token, chat_id, message)
+
+
 async def dispatch_threat_sms(camera_id: str, camera_name: str, threat_type: str, confidence: float) -> None:
     """Main threat alert dispatcher. Evaluates cooldown, resolves target phone numbers,
-    and dispatches alert to WhatsApp (or Webhook as fallback)."""
+    and sends alerts via Telegram, Twilio, or Webhook."""
     if not can_send_sms(camera_id):
         logger.debug("sms.cooldown_active camera_id=%s threat=%s", camera_id, threat_type)
-        return
-
-    recipients = await get_target_recipients_for_camera(camera_id)
-    if not recipients:
-        logger.info("sms.no_recipients camera_id=%s threat=%s", camera_id, threat_type)
         return
 
     display_name = camera_name or camera_id
     conf_pct = int(confidence * 100) if confidence <= 1.0 else int(confidence)
     msg = f"🚨 GUARDIAN ALERT: Active threat '{threat_type}' ({conf_pct}%) detected on camera '{display_name}' ({camera_id})!"
 
+    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+
+    if telegram_token and telegram_chat_id:
+        await send_telegram_alert(msg)
+
+    recipients = await get_target_recipients_for_camera(camera_id)
     meta = {
         "camera_id": camera_id,
         "camera_name": camera_name,
@@ -243,9 +299,10 @@ async def dispatch_threat_sms(camera_id: str, camera_name: str, threat_type: str
         "confidence": confidence,
     }
 
-    whatsapp_key = os.environ.get("WHATSAPP_API_KEY", "").strip()
+    account_sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+    auth_token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
 
-    if whatsapp_key:
-        await send_whatsapp_alert(recipients, msg)
-    else:
+    if account_sid and auth_token and recipients:
+        await send_sms_twilio(recipients, msg)
+    elif not (telegram_token and telegram_chat_id) and recipients:
         await send_sms_webhook(recipients, msg, meta)
