@@ -72,7 +72,6 @@ Our approach combines data from different weapon and CCTV datasets (including Ka
 | **mAP** | Mean Average Precision |
 | **ONNX** | Open Neural Network Exchange |
 | **ReLU** | Rectified Linear Unit |
-| **ROC** | Receiver Operating Characteristic |
 | **SMS** | Short Message Service |
 | **SORT** | Simple Online and Realtime Tracking |
 | **T-IoU** | Temporal Intersection over Union |
@@ -391,7 +390,7 @@ Raw detection boxes can jitter or drop during fast camera movements. GUARDIAN wr
 
 ```python
 # Code Snippet 3.2: Zero-Lag Bounding Box EMA Smoothing (tracker.py)
-def smooth_box(self, track_id: int, raw_box: list[int], alpha: float = 0.70) -> list[int]:
+def smooth_box(self, track_id: int, raw_box: list[int], alpha: float = 0.60) -> list[int]:
     if track_id not in self.prev_boxes:
         self.prev_boxes[track_id] = raw_box
         return raw_box
