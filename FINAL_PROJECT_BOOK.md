@@ -46,7 +46,7 @@ Our approach combines data from different weapon and CCTV datasets (including Ka
 3. **System Design and Implementation** ............................................................................ 9  
    3.1. System Architecture ................................................................................................. 9  
    3.2. Data & Database Architecture .................................................................................. 11  
-   3.3. Algorithmic & Deep Learning Architecture (CRITICAL SECTION) ........................ 13  
+   3.3. Algorithmic & Deep Learning Architecture .......................................... 13  
    3.4. Evaluation Metrics .................................................................................................... 18  
 4. **Results and Analysis** ..................................................................................................... 20  
    4.1. Experimental Setup .................................----------------------------------------------------------------- 20  
@@ -73,6 +73,7 @@ Our approach combines data from different weapon and CCTV datasets (including Ka
 | **ONNX** | Open Neural Network Exchange |
 | **ReLU** | Rectified Linear Unit |
 | **ROC** | Receiver Operating Characteristic |
+| **SMS** | Short Message Service |
 | **SORT** | Simple Online and Realtime Tracking |
 | **T-IoU** | Temporal Intersection over Union |
 | **UCF** | University of Central Florida |
@@ -109,10 +110,11 @@ The main goal of this project is to develop and evaluate **GUARDIAN**, an optimi
 * **Develop a Spatial Threat Detector:** Train and export an optimized YOLOv8 ONNX model using a unified dataset of weapons (**Gun**, **Knife**) and human entities (**Suspect**), reaching mAP@0.5 > 85% on noisy surveillance feeds.
 * **Implement Zero-Lag Tracking:** Build an enhanced tracking state machine on top of **ByteTrack** [7] that eliminates the standard 3–5 frame tentative track initialization delay—displaying newly detected targets instantly on Frame 1—while applying single-frame EMA coordinate smoothing to prevent bounding box flicker.
 * **Design a Lightweight Temporal Action Classifier:** Create a 12-dimensional feature vector (coordinates, velocities, and weapon proximity) and train a **1D-CNN** to classify sequences of **Normal**, **Shooting**, and **Violence** with high accuracy (reaching up to 79.6% F1-score on violent actions and 73.7% overall test accuracy) over a 30-frame window.
+* **Implement Automated Threat Notification Dispatching:** Build an asynchronous alert dispatching service (`sms_service.py`) that integrates Telegram Bot API and SMS gateway notifications, triggering instant push alerts with per-camera cooldown rate-limiting upon detecting active threats (**Shooting** or **Violence**).
 * **Achieve Near Real-Time Execution:** Implement a zero-dependency NumPy inference engine that, together with ONNX Runtime, runs the entire pipeline in under 25 ms per frame (>40 FPS) on standard hardware.
 
 #### 1.4. Scope and Limitations
-* **Scope:** GUARDIAN focuses on near real-time threat detection from fixed CCTV cameras. The system includes stream ingestion, backend FastAPI inference, PostgreSQL storage for cameras and alerts, and a web dashboard built with React 19 and Tailwind v4.
+* **Scope:** GUARDIAN focuses on near real-time threat detection from fixed CCTV cameras. The system includes stream ingestion, backend FastAPI inference, PostgreSQL storage for cameras and alerts, an automated Telegram/SMS threat notification service (`sms_service.py`), and a web dashboard built with React 19 and Tailwind v4.
 * **Limitations:** The temporal action classifier recognizes three main states (**Normal**, **Shooting**, and **Violence**). Extremely crowded locations (with >100 overlapping people per frame) exceed the capacity of the near real-time tracking system. Audio analysis and tracking people across different rooms are not covered in this project.
 
 #### 1.5. Methodology
@@ -228,6 +230,7 @@ Figure 3.1: GUARDIAN End-to-End System Architecture Diagram
   * `WS /consumer/{stream_id}`: Broadcasts processed frames followed by JSON metadata to dashboards.
   * `GET /consumer/{stream_id}/frame`: Snapshot fallback for low-bandwidth environments.
 * **Inference Layer:** Frames are decoded, run through the YOLOv8 model via ONNX Runtime, smoothed with a tracking state machine (`tracker.py`), compiled into 30-frame buffers (`temporal_action.py`), and classified by the NumPy 1D-CNN.
+* **Instant Notification Engine (`sms_service.py`):** An asynchronous alert service that monitors 1D-CNN temporal sequence evaluations. Upon detecting an active threat state (**Shooting** or **Violence**) with confidence $\ge 50\%$, it formats and dispatches instant push notifications via Telegram Bot API or SMS gateways (`🚨 GUARDIAN ALERT: Active threat 'Violence' (79%) detected on camera 'Lobby'`). The engine incorporates a thread-safe per-camera rate limiter (`SMS_COOLDOWN_SECONDS`, defaulting to 2 seconds) to avoid alert spamming during continuous threat sequences.
 * **Deployment & Proxy:** Containerized with Docker. Nginx serves the compiled frontend and proxies API, WebSocket, and health requests to the FastAPI backend.
 
 ---
@@ -311,7 +314,7 @@ To balance class representation and make the network robust, GUARDIAN implements
 
 ---
 
-#### 3.3. Algorithmic & Deep Learning Architecture (CRITICAL SECTION)
+#### 3.3. Algorithmic & Deep Learning Architecture
 
 GUARDIAN processes video frames in three connected stages: spatial threat detection -> temporal tracking -> sequence classification.
 
@@ -504,6 +507,12 @@ def forward(self, seq: np.ndarray) -> np.ndarray:
     exp_logits = np.exp(logits - np.max(logits))                     # Stable Softmax
     return exp_logits / np.sum(exp_logits)
 ```
+
+##### 3.3.4. Real-Time Alert Notification Dispatching & Cooldown Management
+To ensure active threats immediately reach security operators outside the control room dashboard, GUARDIAN incorporates an automated notification dispatch engine (`sms_service.py`).
+* **Asynchronous Threat Dispatching:** During active WebSocket stream processing (`streams_controller.py`), as 1D-CNN temporal sequence evaluations yield action confidences $\ge 50\%$ (`ACTION_CONF_THRESHOLD`), the backend launches an asynchronous non-blocking task (`dispatch_threat_sms`).
+* **Multi-Channel Push Alerts:** The service formats alert messages containing the stream ID, camera name/location, threat classification, and confidence score (`🚨 GUARDIAN ALERT: Active threat 'Violence' (79%) detected on camera 'Lobby'`), sending instant push notifications over the Telegram Bot API (`sendMessage`) or HTTP SMS gateways.
+* **Thread-Safe Cooldown Rate-Limiting:** To prevent flooding security personnel with continuous notifications for every frame of a multi-second incident, `sms_service.py` enforces a thread-safe per-camera rate limit (`SMS_COOLDOWN_SECONDS`, defaulting to 2 seconds). Alerts for a specific camera ID are suppressed if dispatched within the cooldown window, resuming immediately once the interval elapses.
 
 ##### 3.3.5. Pipeline Optimizations: Static Displacement Filter and Weapon-Aware Overrides
 To prevent false alarms in public spaces, GUARDIAN embeds a short-circuit optimization in `pipeline.py`:

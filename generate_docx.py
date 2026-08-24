@@ -125,6 +125,41 @@ def extract_missing_figures():
     except Exception as e:
         print(f"WARNING: Failed to auto-extract figures from notebook: {e}")
 
+def add_header_footer(doc):
+    section = doc.sections[0]
+    section.different_first_page_header_footer = False
+
+    # Header
+    header = section.header
+    hp = header.paragraphs[0]
+    hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    hrun = hp.add_run("GUARDIAN: Near Real-Time Threat & Behavioral Detection System")
+    hrun.font.name = 'Calibri'
+    hrun.font.size = Pt(8.5)
+    hrun.font.italic = True
+    hrun.font.color.rgb = RGBColor(0x5A, 0x6B, 0x7C)
+
+    # Footer
+    footer = section.footer
+    fp = footer.paragraphs[0]
+    fp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    
+    frun = fp.add_run("Page ")
+    frun.font.name = 'Calibri'
+    frun.font.size = Pt(9)
+    frun.font.color.rgb = RGBColor(0x5A, 0x6B, 0x7C)
+
+    fldSimple1 = parse_xml(r'<w:fldSimple %s w:instr="PAGE"/>' % nsdecls('w'))
+    fp._p.append(fldSimple1)
+
+    frun2 = fp.add_run(" of ")
+    frun2.font.name = 'Calibri'
+    frun2.font.size = Pt(9)
+    frun2.font.color.rgb = RGBColor(0x5A, 0x6B, 0x7C)
+
+    fldSimple2 = parse_xml(r'<w:fldSimple %s w:instr="NUMPAGES"/>' % nsdecls('w'))
+    fp._p.append(fldSimple2)
+
 def convert_md_to_docx(md_path, output_docx_path):
     extract_missing_figures()
     doc = Document()
@@ -136,6 +171,9 @@ def convert_md_to_docx(md_path, output_docx_path):
         section.bottom_margin = Inches(1)
         section.left_margin = Inches(1)
         section.right_margin = Inches(1)
+
+    # Configure Header & Footer
+    add_header_footer(doc)
 
     # Configure Default Font
     style_normal = doc.styles['Normal']
