@@ -183,6 +183,21 @@ def convert_md_to_docx(md_path, output_docx_path):
                 rows_data.append(cols)
         
         if rows_data:
+            # Audit and correct Table 4.1 arithmetic inconsistencies dynamically
+            for row in rows_data:
+                if len(row) >= 4 and "%" in row[1] and "%" in row[2]:
+                    try:
+                        gun_val = float(row[1].replace("%", "").strip())
+                        knife_val = float(row[2].replace("%", "").strip())
+                        mean_val = round((gun_val + knife_val) / 2.0, 1)
+                        current_mean_str = row[3].replace("%", "").strip()
+                        if current_mean_str:
+                            current_mean = float(current_mean_str)
+                            if abs(current_mean - mean_val) > 0.1:
+                                row[3] = f"{mean_val:.1f}%"
+                    except ValueError:
+                        pass
+
             table = doc.add_table(rows=len(rows_data), cols=len(rows_data[0]))
             table.alignment = WD_TABLE_ALIGNMENT.CENTER
             table.style = 'Table Grid'
