@@ -49,12 +49,14 @@ Our approach combines data from different weapon and CCTV datasets (including Ka
    3.3. Algorithmic & Deep Learning Architecture .......................................... 13  
    3.4. Evaluation Metrics .................................................................................................... 18  
 4. **Results and Analysis** ..................................................................................................... 20  
-   4.1. Experimental Setup .................................----------------------------------------------------------------- 20  
+   4.1. Experimental Setup .................................................................................................... 20  
    4.2. Presentation of Results ............................................................................................. 21  
    4.3. Data Analysis and Interpretation ............................................................................... 23  
    4.4. Comparison with Existing Approaches .................................................................... 24  
    4.5. Discussion of Findings ............................................................................................. 25  
-5. **Conclusion and Future Work** .................................................................................------ 26  
+5. **Conclusion and Future Work** ..................................................................................... 26  
+   5.1. Conclusion ................................................................................................................... 26  
+   5.2. Future Work ................................................................................................................. 26  
 6. **References** ...................................................................................................................... 27  
 7. **Appendix A: Setup and Operational Instructions** ..................................................... 29  
 
@@ -229,7 +231,7 @@ Figure 3.1: GUARDIAN End-to-End System Architecture Diagram
   * `WS /consumer/{stream_id}`: Broadcasts processed frames followed by JSON metadata to dashboards.
   * `GET /consumer/{stream_id}/frame`: Snapshot fallback for low-bandwidth environments.
 * **Inference Layer:** Frames are decoded, run through the YOLOv8 model via ONNX Runtime, smoothed with a tracking state machine (`tracker.py`), compiled into 30-frame buffers (`temporal_action.py`), and classified by the NumPy 1D-CNN.
-* **Instant Notification Engine (`sms_service.py`):** An asynchronous alert service that monitors 1D-CNN temporal sequence evaluations. Upon detecting an active threat state (**Shooting** or **Violence**) with confidence $\ge 50\%$, it formats and dispatches instant push notifications via Telegram Bot API or SMS gateways (`🚨 GUARDIAN ALERT: Active threat 'Violence' (79%) detected on camera 'Lobby'`). The engine incorporates a thread-safe per-camera rate limiter (`SMS_COOLDOWN_SECONDS`, defaulting to 2 seconds) to avoid alert spamming during continuous threat sequences.
+* **Instant Notification Engine (`sms_service.py`):** An asynchronous alert service that monitors 1D-CNN temporal sequence evaluations. Upon detecting an active threat state (**Shooting** or **Violence**) with confidence >= 50%, it formats and dispatches instant push notifications via Telegram Bot API or SMS gateways (`🚨 GUARDIAN ALERT: Active threat 'Violence' (79%) detected on camera 'Lobby'`). The engine incorporates a thread-safe per-camera rate limiter (`SMS_COOLDOWN_SECONDS`, defaulting to 2 seconds) to avoid alert spamming during continuous threat sequences.
 * **Deployment & Proxy:** Containerized with Docker. Nginx serves the compiled frontend and proxies API, WebSocket, and health requests to the FastAPI backend.
 
 ---
@@ -509,7 +511,7 @@ def forward(self, seq: np.ndarray) -> np.ndarray:
 
 ##### 3.3.4. Real-Time Alert Notification Dispatching & Cooldown Management
 To ensure active threats immediately reach security operators outside the control room dashboard, GUARDIAN incorporates an automated notification dispatch engine (`sms_service.py`).
-* **Asynchronous Threat Dispatching:** During active WebSocket stream processing (`streams_controller.py`), as 1D-CNN temporal sequence evaluations yield action confidences $\ge 50\%$ (`ACTION_CONF_THRESHOLD`), the backend launches an asynchronous non-blocking task (`dispatch_threat_sms`).
+* **Asynchronous Threat Dispatching:** During active WebSocket stream processing (`streams_controller.py`), as 1D-CNN temporal sequence evaluations yield action confidences >= 50% (`ACTION_CONF_THRESHOLD`), the backend launches an asynchronous non-blocking task (`dispatch_threat_sms`).
 * **Multi-Channel Push Alerts:** The service formats alert messages containing the stream ID, camera name/location, threat classification, and confidence score (`🚨 GUARDIAN ALERT: Active threat 'Violence' (79%) detected on camera 'Lobby'`), sending instant push notifications over the Telegram Bot API (`sendMessage`) or HTTP SMS gateways.
 * **Thread-Safe Cooldown Rate-Limiting:** To prevent flooding security personnel with continuous notifications for every frame of a multi-second incident, `sms_service.py` enforces a thread-safe per-camera rate limit (`SMS_COOLDOWN_SECONDS`, defaulting to 2 seconds). Alerts for a specific camera ID are suppressed if dispatched within the cooldown window, resuming immediately once the interval elapses.
 
